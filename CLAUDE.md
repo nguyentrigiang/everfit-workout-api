@@ -29,7 +29,7 @@ bulk-log workouts, query history, compute personal records (PRs).
 
 - NestJS (TypeScript, strict mode)
 - PostgreSQL 16 + Prisma (use `$queryRaw` with tagged templates for aggregation / pagination queries)
-- Jest + Supertest for tests
+- Vitest + Supertest for tests (`vi.fn()`, not `jest.fn()`); oxlint for linting; project is ESM (`"type": "module"`, relative imports end in `.js`)
 - nestjs-pino for structured logging, @nestjs/config with validated env
 - Docker Compose for local setup (`docker compose up` must work from a fresh clone)
 
