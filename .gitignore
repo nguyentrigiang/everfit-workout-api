@@ -1,0 +1,19 @@
+# Dependencies & build
+node_modules/
+dist/
+coverage/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs & OS
+*.log
+.DS_Store
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Original assignment text (kept local, not published)
+docs/ASSIGNMENT.md
