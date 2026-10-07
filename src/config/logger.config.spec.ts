@@ -11,7 +11,10 @@ function pinoHttpOptions(env: Partial<EnvironmentVariables>): Options {
 }
 
 describe('buildLoggerOptions', () => {
-  const production = { NODE_ENV: NodeEnv.Production, LOG_LEVEL: 'info' } as const;
+  const production = {
+    NODE_ENV: NodeEnv.Production,
+    LOG_LEVEL: 'info',
+  } as const;
 
   it('logs only id, method and url of a request (no headers, no body)', () => {
     const { serializers } = pinoHttpOptions(production);

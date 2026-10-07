@@ -60,8 +60,9 @@ bulk-log workouts, query history, compute personal records (PRs).
 - Validation with class-validator DTOs + global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })`.
 - Error response shape (global exception filter), always:
   ```json
-  { "statusCode": 400, "error": "Bad Request", "message": "...", "details": [], "path": "/api/v1/...", "timestamp": "...", "requestId": "..." }
+  { "statusCode": 400, "code": "VALIDATION_ERROR", "error": "Bad Request", "message": "Validation failed", "details": [{ "field": "entries[0].sets[2].weight", "message": "..." }], "path": "/api/v1/...", "timestamp": "...", "requestId": "..." }
   ```
+- Throw domain errors as `AppException(status, ErrorCode.X, message, details?)` (`src/common/errors`); add new codes to `ErrorCode`. Never return error bodies manually from controllers.
 - Empty results are NOT errors: return `200` with `data: []` and a `message`.
 - List responses: `{ data, pagination: { nextCursor, hasMore, limit } }`.
 

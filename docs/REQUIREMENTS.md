@@ -68,3 +68,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done. Add evidence (file / test / c
 - [ ] D10 AI_WORKFLOW.md: ≥1 rejected AI suggestion + why
 - [ ] D11 AI_WORKFLOW.md: prompting strategy
 - [ ] D12 Video (English, 15–20 min): architecture, demo incl. errors, AI workflow, line-by-line code, 10k coaches scaling
+
+## Backlog (if time allows)
+
+- [ ] B1 Dedicated `MALFORMED_JSON` error code for unparsable JSON bodies. Today it returns 400 `BAD_REQUEST` (standard shape, parser message). Cause: Nest's Express adapter maps body-parser `SyntaxError` to `new BadRequestException(message)` without `cause`, so the filter cannot tell it apart. Fix: disable Nest's body parser and register a wrapped `express.json()` that converts parse errors into `AppException(MALFORMED_JSON)`, shared by `main.ts` and e2e setup. Same root cause: body-parser runs before pino-http, so such requests get no request log line (the filter still generates a requestId).
