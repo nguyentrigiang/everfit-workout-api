@@ -50,7 +50,9 @@ export class EnvironmentVariables {
  * Validates process env at startup (passed to ConfigModule.forRoot).
  * Throws one error listing every invalid variable so misconfiguration fails fast.
  */
-export function validate(config: Record<string, unknown>): EnvironmentVariables {
+export function validate(
+  config: Record<string, unknown>,
+): EnvironmentVariables {
   const env = plainToInstance(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });
@@ -59,7 +61,8 @@ export function validate(config: Record<string, unknown>): EnvironmentVariables 
   if (errors.length > 0) {
     const details = errors
       .map(
-        (e) => `${e.property}: ${Object.values(e.constraints ?? {}).join(', ')}`,
+        (e) =>
+          `${e.property}: ${Object.values(e.constraints ?? {}).join(', ')}`,
       )
       .join('; ');
     throw new Error(`Invalid environment variables: ${details}`);

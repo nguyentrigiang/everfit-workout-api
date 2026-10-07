@@ -25,8 +25,7 @@ export function resolveRequestId(
 export function buildLoggerOptions(
   config: ConfigService<EnvironmentVariables, true>,
 ): Params {
-  const isDev =
-    config.get('NODE_ENV', { infer: true }) === NodeEnv.Development;
+  const isDev = config.get('NODE_ENV', { infer: true }) === NodeEnv.Development;
 
   return {
     pinoHttp: {
