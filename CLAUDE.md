@@ -13,6 +13,9 @@ bulk-log workouts, query history, compute personal records (PRs).
 - Present plans through plan mode (ExitPlanMode) so approval is an explicit step. "Looks good", "ok", "approve", "làm đi" count as approval; questions or comments do not.
 - Approval covers only the approved plan. If the work needs to go beyond it (new file, new dependency, schema change, different approach), stop and ask again.
 - Exceptions (no plan needed): reading files, running read-only commands, running tests, answering questions.
+- Keep each plan small: one concern per plan. Do not bundle several items (e.g. scaffold + logging + validation) into one plan.
+- **Git: commit only when the user explicitly says "commit".** Push, or create/change GitHub repos, only when the user explicitly says "push" / "đẩy lên". Approving a plan is NOT permission to commit or push. After finishing work: show a summary of changed files and the proposed commit message, then stop and wait.
+- **Language**: plans, questions and reports to the user are written in Vietnamese. Code, comments, commit messages and repo docs are in English.
 
 ## Source of truth
 
@@ -97,6 +100,7 @@ Types (only these two, no others):
 
 Rules:
 
+- Commit messages describe only the project itself (features, setup, code, tests, project docs). Never mention edits to AI workflow files (CLAUDE.md, `.claude/` skills/agents) or the user's requests about how the AI works; those files may be included in a commit silently.
 - Summary line says WHAT changed at a high level; bullets list the concrete changes.
 - Bullets are specific (`- Add GIN trigram index on exercises.name`), not vague (`- Update files`).
 - For `Bugfix`, the first bullet states the cause (`- Cause: lb weights converted with float math, causing rounding drift`).

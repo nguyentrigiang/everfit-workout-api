@@ -1,0 +1,23 @@
+# Decisions
+
+Decisions made with the user during planning. Feeds the README "design decisions / trade-offs" section.
+
+## 2026-10-07 — ORM
+- Decision: Prisma.
+- Alternatives: TypeORM (closest to Eloquent, official @nestjs/typeorm), Drizzle (SQL-like, typed).
+- Why: Fast setup, generated migrations, strongest type-safety. Heavy aggregation / pagination queries are written as raw SQL with `$queryRaw` tagged templates (bind parameters) for full control over query plans and indexes.
+
+## 2026-10-07 — Database for e2e tests
+- Decision: A separate test database (`everfit_test`) on the same Postgres container in docker-compose.
+- Alternatives: Testcontainers (fresh container per run).
+- Why: Simple and fast, no extra dependency. Trade-off: tests share a long-lived DB, so each test uses its own userId and the suite resets tables before running.
+
+## 2026-10-07 — Startup behavior of `docker compose up`
+- Decision: The app container runs `prisma migrate deploy` (and the exercise seed, once it exists) automatically before starting.
+- Alternatives: Manual migration/seed commands documented in README.
+- Why: The assignment requires setup to work with `docker compose up`; reviewers get a working API with one command. The 50k-entry performance seed stays a separate command.
+
+## 2026-10-07 — API documentation
+- Decision: Swagger (OpenAPI) UI at `/docs`, generated from DTOs; README summarizes endpoints and error codes.
+- Alternatives: README only.
+- Why: Docs stay in sync with validation rules, and the video demo can use Swagger UI.
