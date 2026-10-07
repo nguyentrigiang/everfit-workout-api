@@ -56,7 +56,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done. Add evidence (file / test / c
 
 ## Deliverables
 
-- [ ] D1 Time estimate committed before coding
+- [x] D1 Time estimate provided before starting — sent to Everfit by email
 - [ ] D2 Clean, iterative commit history
 - [ ] D3 README: architecture overview + diagram
 - [ ] D4 README: setup instructions
