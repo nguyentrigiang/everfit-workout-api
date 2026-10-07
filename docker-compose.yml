@@ -19,6 +19,7 @@ services:
     build: .
     environment:
       PORT: 3000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       DATABASE_URL: postgresql://${POSTGRES_USER:-everfit}:${POSTGRES_PASSWORD:-everfit}@db:5432/${POSTGRES_DB:-everfit}
     ports:
       - "${APP_PORT:-3000}:3000"
