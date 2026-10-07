@@ -88,17 +88,12 @@ Format:
 - <what was done>
 ```
 
-Types:
+Types (only these two, no others):
 
 | Type | Use for |
 |---|---|
-| `Feature` | New functionality (endpoint, module, capability) |
+| `Feature` | Everything that is not a bug fix: new functionality, setup, config, Docker, tests, docs, refactors, performance work |
 | `Bugfix` | Fixing incorrect behavior |
-| `Refactor` | Code restructuring without behavior change |
-| `Perf` | Performance work (indexes, query rewrites) |
-| `Test` | Adding or improving tests only |
-| `Docs` | README, AI_WORKFLOW.md, comments |
-| `Chore` | Setup, config, tooling, dependencies, Docker |
 
 Rules:
 
