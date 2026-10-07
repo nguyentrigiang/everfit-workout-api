@@ -14,4 +14,6 @@ description: Check progress against the assignment: update docs/REQUIREMENTS.md 
    - AI_WORKFLOW material collected so far vs required (≥2 wrong outputs, ≥1 rejection); remind the user to note examples now if missing
    - Commit history health: number of commits, any giant commits, message format
    - Time check vs the day budget; recommend what to do next and what to cut
-Keep the report short.
+Keep the report short and write it in Vietnamese.
+
+Never commit or push. You may suggest commits (with proposed messages); the user decides when to commit and push.

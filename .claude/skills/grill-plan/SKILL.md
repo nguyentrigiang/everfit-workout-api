@@ -64,3 +64,9 @@ Output a short plan:
 - Do not write or edit any code, test, migration or config until approved. Recording decisions in `docs/DECISIONS.md` is the only write allowed before approval.
 - If the user requests changes, revise and present again.
 - After approval, implement only what the plan covers; anything beyond it needs a new approval.
+- Approval of the plan is NOT permission to commit or push. When done, show a summary and the proposed commit message, then wait. Commit only when the user says "commit"; push only when the user says "push" / "đẩy lên".
+
+## Language and scope
+
+- Write questions, the plan and reports in Vietnamese (code, commit messages and repo docs stay in English).
+- One concern per plan. If the request spans several areas, plan the first one and list the rest as follow-ups.
