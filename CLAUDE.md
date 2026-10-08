@@ -54,7 +54,7 @@ bulk-log workouts, query history, compute personal records (PRs).
 - **Time**: store `performed_at` as `timestamptz` (UTC) plus `local_date` and `timezone` (IANA) for calendar-based grouping. Never use `new Date('YYYY-MM-DD')` without an explicit timezone.
 - **Pagination**: cursor-based (keyset) on `(performed_at DESC, id DESC)`. No OFFSET.
 - **PRs**: computed on read using indexed queries (`ORDER BY ... LIMIT 1` or SQL aggregation). Never load all sets into memory.
-- **Bulk writes**: one transaction per request. Support `Idempotency-Key` header (unique on `user_id + idempotency_key`).
+- **Bulk writes**: one transaction per request. Idempotent via the natural key `(user_id, exercise_id, performed_at)` with `ON CONFLICT DO NOTHING` (see `docs/DECISIONS.md`); there is no `Idempotency-Key` header.
 - **Performance target**: endpoints must stay fast with 50,000+ entries per user. Any new query needs a matching index; mention it.
 
 ## API conventions
@@ -121,5 +121,5 @@ Feature: Add bulk workout logging endpoint
 - Validate units, non-negative reps/weight, non-empty sets via DTOs
 - Store original weight/unit plus normalized weight_kg
 - Insert all entries in a single transaction
-- Enforce Idempotency-Key with unique (user_id, idempotency_key)
+- Skip duplicate entries via the natural key with ON CONFLICT DO NOTHING
 ```
