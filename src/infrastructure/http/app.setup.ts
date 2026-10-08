@@ -1,6 +1,6 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ErrorResponseDto } from './common/errors/error-response.dto.js';
+import { ErrorResponseDto } from '../../shared/errors/error-response.dto.js';
 
 export const API_PREFIX = 'api/v1';
 export const DOCS_PATH = 'docs';

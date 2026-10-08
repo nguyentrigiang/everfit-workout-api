@@ -6,7 +6,7 @@ import {
   ValidateNested,
   validateSync,
 } from 'class-validator';
-import { ErrorCode } from '../errors/error-code.js';
+import { ErrorCode } from '../../shared/errors/error-code.js';
 import {
   flattenValidationErrors,
   validationExceptionFactory,

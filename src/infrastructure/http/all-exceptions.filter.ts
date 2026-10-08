@@ -8,9 +8,15 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { AppException, type ErrorDetail } from '../errors/app.exception.js';
-import { defaultCodeForStatus, ErrorCode } from '../errors/error-code.js';
-import { resolveRequestId } from '../../config/logger.config.js';
+import {
+  AppException,
+  type ErrorDetail,
+} from '../../shared/errors/app.exception.js';
+import {
+  defaultCodeForStatus,
+  ErrorCode,
+} from '../../shared/errors/error-code.js';
+import { resolveRequestId } from '../logging/logger.config.js';
 
 export interface ErrorResponseBody {
   statusCode: number;

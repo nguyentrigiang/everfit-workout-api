@@ -1,13 +1,13 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { toApiNumber } from '../../../common/decimal.js';
+import { toApiNumber } from '../domain/decimal.js';
 import {
   AppException,
   type ErrorDetail,
-} from '../../../common/errors/app.exception.js';
-import { ErrorCode } from '../../../common/errors/error-code.js';
+} from '../../../shared/errors/app.exception.js';
+import { ErrorCode } from '../../../shared/errors/error-code.js';
 import { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
-import { PrismaService } from '../../../prisma/prisma.service.js';
+import { PrismaService } from '../../../infrastructure/database/prisma/prisma.service.js';
 import { UnitConverter } from '../domain/units/unit-converter.js';
 import type { PersonalRecordsQuery } from '../dto/requests/personal-records.query.js';
 import {

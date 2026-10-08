@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
-import { validateCatalogConfig } from '../src/database/seed/catalog-config.js';
-import { seedCatalog } from '../src/database/seed/seed-catalog.js';
+import { validateCatalogConfig } from '../src/infrastructure/database/seed/catalog-config.js';
+import { seedCatalog } from '../src/infrastructure/database/seed/seed-catalog.js';
 
 // Prepare the e2e database: apply migrations, wipe data left by earlier runs, then seed
 // the catalog like a container start, so every run starts from the same state.

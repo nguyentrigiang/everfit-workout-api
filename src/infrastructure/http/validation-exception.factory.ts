@@ -1,7 +1,10 @@
 import { HttpStatus } from '@nestjs/common';
 import type { ValidationError } from 'class-validator';
-import { AppException, type ErrorDetail } from '../errors/app.exception.js';
-import { ErrorCode } from '../errors/error-code.js';
+import {
+  AppException,
+  type ErrorDetail,
+} from '../../shared/errors/app.exception.js';
+import { ErrorCode } from '../../shared/errors/error-code.js';
 
 function joinPath(parent: string, property: string): string {
   if (/^\d+$/.test(property)) return `${parent}[${property}]`;

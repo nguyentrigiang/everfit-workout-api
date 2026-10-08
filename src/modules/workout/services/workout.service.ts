@@ -2,17 +2,14 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   AppException,
   type ErrorDetail,
-} from '../../../common/errors/app.exception.js';
-import { ErrorCode } from '../../../common/errors/error-code.js';
-import { toApiNumber } from '../../../common/decimal.js';
-import {
-  decodeCursor,
-  encodeCursor,
-} from '../../../common/pagination/cursor.js';
-import { parseOffsetDateTime } from '../../../common/time/offset-datetime.js';
+} from '../../../shared/errors/app.exception.js';
+import { ErrorCode } from '../../../shared/errors/error-code.js';
+import { toApiNumber } from '../domain/decimal.js';
+import { decodeCursor, encodeCursor } from '../domain/history-cursor.js';
+import { parseOffsetDateTime } from '../domain/time/offset-datetime.js';
 import { normalizeExerciseName } from '../../exercise/domain/exercise-name.js';
 import { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
-import { PrismaService } from '../../../prisma/prisma.service.js';
+import { PrismaService } from '../../../infrastructure/database/prisma/prisma.service.js';
 import { UnitConverter } from '../domain/units/unit-converter.js';
 import type { ListWorkoutsQuery } from '../dto/requests/list-workouts.query.js';
 import type { LogWorkoutsDto } from '../dto/requests/log-workouts.dto.js';

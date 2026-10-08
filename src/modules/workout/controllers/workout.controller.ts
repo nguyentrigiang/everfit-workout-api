@@ -13,7 +13,7 @@ import type { Response } from 'express';
 import {
   ApiErrorResponse,
   ApiExampleResponse,
-} from '../../../docs/api-responses.js';
+} from '../../../shared/swagger/api-responses.js';
 import {
   HISTORY_CURSOR_ERROR_EXAMPLE,
   HISTORY_EMPTY_EXAMPLE,
@@ -23,7 +23,7 @@ import {
   LOG_DUPLICATE_EXAMPLE,
   LOG_REQUEST_EXAMPLE,
   LOG_VALIDATION_ERROR_EXAMPLE,
-} from '../dto/responses/examples.js';
+} from './api-examples.js';
 import { ListWorkoutsQuery } from '../dto/requests/list-workouts.query.js';
 import {
   LogWorkoutsDto,
@@ -48,6 +48,8 @@ export class WorkoutController {
   /** Bulk log. 201 if anything was created, 200 if every entry already existed (retry). */
   @Post()
   @ApiOperation({
+    // Stable id for generated clients, independent of class names.
+    operationId: 'logWorkouts',
     summary: 'Log workouts (bulk)',
     description:
       'Logs one or more exercises in a single all-or-nothing transaction. Weights are stored in kg next to the original value. ' +
@@ -91,6 +93,7 @@ export class WorkoutController {
   /** History, newest first, with filters, unit conversion and cursor pagination. */
   @Get()
   @ApiOperation({
+    operationId: 'listWorkoutHistory',
     summary: 'Workout history',
     description:
       'Entries newest first with their sets. Filters: partial exercise name, muscle group slug, ' +

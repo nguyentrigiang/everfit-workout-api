@@ -1,5 +1,5 @@
 import type { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
-import type { PrismaService } from '../../../prisma/prisma.service.js';
+import type { PrismaService } from '../../../infrastructure/database/prisma/prisma.service.js';
 import { UnitConverter } from '../domain/units/unit-converter.js';
 import { DEFAULT_UNIT_REGISTRY } from '../domain/units/unit-registry.js';
 import type { LogWorkoutsDto } from '../dto/requests/log-workouts.dto.js';

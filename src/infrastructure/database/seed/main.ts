@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../../generated/prisma/client.js';
+import { PrismaClient } from '../../../generated/prisma/client.js';
 import { loadCatalogConfig } from './catalog-config.js';
 import { seedCatalog } from './seed-catalog.js';
 

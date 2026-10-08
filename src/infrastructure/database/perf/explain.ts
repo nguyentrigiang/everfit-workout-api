@@ -1,11 +1,11 @@
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { Prisma, PrismaClient } from '../../generated/prisma/client.js';
-import { encodeCursor } from '../../common/pagination/cursor.js';
-import { ExerciseRepository } from '../../modules/exercise/repositories/exercise.repository.js';
-import { PersonalRecordRepository } from '../../modules/workout/repositories/personal-record.repository.js';
-import { WorkoutRepository } from '../../modules/workout/repositories/workout.repository.js';
+import { Prisma, PrismaClient } from '../../../generated/prisma/client.js';
+import { encodeCursor } from '../../../modules/workout/domain/history-cursor.js';
+import { ExerciseRepository } from '../../../modules/exercise/repositories/exercise.repository.js';
+import { PersonalRecordRepository } from '../../../modules/workout/repositories/personal-record.repository.js';
+import { WorkoutRepository } from '../../../modules/workout/repositories/workout.repository.js';
 import { percentile, type PlanSummary, summarizePlan } from './perf-report.js';
 
 // Measures the read paths on the seeded perf-user: `npm run db:explain`.

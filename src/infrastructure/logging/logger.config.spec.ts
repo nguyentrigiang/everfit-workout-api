@@ -1,6 +1,9 @@
 import type { ConfigService } from '@nestjs/config';
 import type { Options } from 'pino-http';
-import { type EnvironmentVariables, NodeEnv } from './env.validation.js';
+import {
+  type EnvironmentVariables,
+  NodeEnv,
+} from '../config/env.validation.js';
 import { buildLoggerOptions } from './logger.config.js';
 
 function pinoHttpOptions(env: Partial<EnvironmentVariables>): Options {

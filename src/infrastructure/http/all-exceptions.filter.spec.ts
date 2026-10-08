@@ -6,8 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { PinoLogger } from 'nestjs-pino';
-import { AppException } from '../errors/app.exception.js';
-import { ErrorCode } from '../errors/error-code.js';
+import { AppException } from '../../shared/errors/app.exception.js';
+import { ErrorCode } from '../../shared/errors/error-code.js';
 import {
   AllExceptionsFilter,
   type ErrorResponseBody,

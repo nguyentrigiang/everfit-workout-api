@@ -1,5 +1,5 @@
 import { ApiResponse, getSchemaPath } from '@nestjs/swagger';
-import { ErrorResponseDto } from '../common/errors/error-response.dto.js';
+import { ErrorResponseDto } from '../errors/error-response.dto.js';
 
 type Examples = Record<string, { summary: string; value: unknown }>;
 
