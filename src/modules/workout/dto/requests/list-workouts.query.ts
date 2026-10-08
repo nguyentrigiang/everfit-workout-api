@@ -10,8 +10,11 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import { IsCalendarDate } from '../../common/time/calendar-date.js';
-import { SUPPORTED_UNITS, type WeightUnit } from '../../units/unit-registry.js';
+import { IsCalendarDate } from '../../../../common/time/calendar-date.js';
+import {
+  SUPPORTED_UNITS,
+  type WeightUnit,
+} from '../../domain/units/unit-registry.js';
 
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;

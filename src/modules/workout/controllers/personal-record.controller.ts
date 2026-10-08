@@ -1,15 +1,19 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
-import { ApiErrorResponse, ApiExampleResponse } from '../docs/api-responses.js';
+import {
+  ApiErrorResponse,
+  ApiExampleResponse,
+} from '../../../docs/api-responses.js';
 import {
   RECORDS_EMPTY_EXAMPLE,
   RECORDS_EXAMPLE,
   RECORDS_NOT_FOUND_EXAMPLE,
   RECORDS_VALIDATION_ERROR_EXAMPLE,
-} from '../docs/examples.js';
-import { UserParamsDto } from '../workouts/dto/log-workouts.dto.js';
-import { RecordsQuery } from './dto/records.query.js';
-import { type RecordsResult, RecordsService } from './records.service.js';
+} from '../dto/responses/examples.js';
+import { UserParamsDto } from '../dto/requests/log-workouts.dto.js';
+import { PersonalRecordsQuery } from '../dto/requests/personal-records.query.js';
+import type { RecordsResult } from '../dto/responses/personal-record.responses.js';
+import { PersonalRecordService } from '../services/personal-record.service.js';
 
 @ApiTags('records')
 @ApiParam({
@@ -18,8 +22,8 @@ import { type RecordsResult, RecordsService } from './records.service.js';
   description: '1-64 chars: letters, digits, _ or -',
 })
 @Controller('users/:userId/records')
-export class RecordsController {
-  constructor(private readonly records: RecordsService) {}
+export class PersonalRecordController {
+  constructor(private readonly records: PersonalRecordService) {}
 
   /** Personal records for one exercise, optionally compared with a second date range. */
   @Get()
@@ -42,7 +46,7 @@ export class RecordsController {
   )
   get(
     @Param() { userId }: UserParamsDto,
-    @Query() query: RecordsQuery,
+    @Query() query: PersonalRecordsQuery,
   ): Promise<RecordsResult> {
     return this.records.getRecords(userId, query);
   }

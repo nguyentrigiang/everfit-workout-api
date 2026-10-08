@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../../../generated/prisma/client.js';
 
 export type RecordMetric = 'weight' | 'volume' | 'e1rm';
 
@@ -23,7 +23,7 @@ export interface RecordsParams {
 }
 
 @Injectable()
-export class RecordsRepository {
+export class PersonalRecordRepository {
   /**
    * The best set per metric in one statement: three top-1 lookups joined with UNION ALL.
    * Without a range each uses the (user_id, exercise_id, <metric> DESC) index; with a

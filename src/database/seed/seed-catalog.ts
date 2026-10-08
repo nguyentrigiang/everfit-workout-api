@@ -2,7 +2,7 @@ import type { PrismaClient } from '../../generated/prisma/client.js';
 import {
   cleanDisplayName,
   normalizeExerciseName,
-} from '../../exercises/exercise-name.js';
+} from '../../modules/exercise/domain/exercise-name.js';
 import type { CatalogConfig } from './catalog-config.js';
 
 export interface SeedResult {

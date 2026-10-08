@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../generated/prisma/client.js';
-import { cleanDisplayName, normalizeExerciseName } from './exercise-name.js';
+import { Prisma } from '../../../generated/prisma/client.js';
+import {
+  cleanDisplayName,
+  normalizeExerciseName,
+} from '../domain/exercise-name.js';
 
 export interface ResolvedExercise {
   id: string;
@@ -8,7 +11,7 @@ export interface ResolvedExercise {
 }
 
 @Injectable()
-export class ExercisesRepository {
+export class ExerciseRepository {
   /**
    * Returns the exercise for each name, creating missing ones (no muscle groups yet).
    * Keyed by normalized name. Insert-if-missing is race-safe via the unique index.

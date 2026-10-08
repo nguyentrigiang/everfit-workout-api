@@ -1,14 +1,15 @@
-import type { ExercisesRepository } from '../exercises/exercises.repository.js';
-import type { PrismaService } from '../prisma/prisma.service.js';
-import { UnitConverter } from '../units/unit-converter.js';
-import { DEFAULT_UNIT_REGISTRY } from '../units/unit-registry.js';
-import type { LogWorkoutsDto } from './dto/log-workouts.dto.js';
+import type { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
+import type { PrismaService } from '../../../prisma/prisma.service.js';
+import { UnitConverter } from '../domain/units/unit-converter.js';
+import { DEFAULT_UNIT_REGISTRY } from '../domain/units/unit-registry.js';
+import type { LogWorkoutsDto } from '../dto/requests/log-workouts.dto.js';
 import type {
   StoredEntryRow,
-  WorkoutsRepository,
-} from './workouts.repository.js';
-import { ListWorkoutsQuery } from './dto/list-workouts.query.js';
-import { NO_WORKOUTS_MESSAGE, WorkoutsService } from './workouts.service.js';
+  WorkoutRepository,
+} from '../repositories/workout.repository.js';
+import { ListWorkoutsQuery } from '../dto/requests/list-workouts.query.js';
+import { NO_WORKOUTS_MESSAGE } from '../dto/responses/workout.responses.js';
+import { WorkoutService } from './workout.service.js';
 
 const SQUAT = { id: 'ex-squat', name: 'Squat' };
 const BENCH = { id: 'ex-bench', name: 'Bench Press' };
@@ -61,16 +62,16 @@ function setup(inserted: StoredEntryRow[], existing: StoredEntryRow[]) {
   const prisma = {
     $transaction: vi.fn((fn: (tx: unknown) => unknown) => fn({})),
   };
-  const service = new WorkoutsService(
+  const service = new WorkoutService(
     prisma as unknown as PrismaService,
-    exercises as unknown as ExercisesRepository,
-    workouts as unknown as WorkoutsRepository,
+    exercises as unknown as ExerciseRepository,
+    workouts as unknown as WorkoutRepository,
     new UnitConverter(DEFAULT_UNIT_REGISTRY),
   );
   return { service, workouts, exercises };
 }
 
-describe('WorkoutsService.logWorkouts', () => {
+describe('WorkoutService.logWorkouts', () => {
   it('counts created and duplicate entries from their status', async () => {
     const { service, workouts } = setup(
       [row(SQUAT.id, '2026-10-01T01:00:00Z')],
@@ -103,7 +104,7 @@ describe('WorkoutsService.logWorkouts', () => {
   });
 });
 
-describe('WorkoutsService.listHistory', () => {
+describe('WorkoutService.listHistory', () => {
   const query = (extra: Partial<ListWorkoutsQuery>) =>
     Object.assign(new ListWorkoutsQuery(), { limit: 20, unit: 'kg' }, extra);
 
