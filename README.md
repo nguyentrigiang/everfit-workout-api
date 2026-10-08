@@ -192,6 +192,7 @@ Each item is a summary. [`docs/DECISIONS.md`](docs/DECISIONS.md) has the alterna
 
 ```bash
 npm ci
+npm run typecheck           # type-check src and tests (Vitest strips types without checking them)
 npm test                    # unit tests (no DB); generates the Prisma client first
 docker compose up -d db     # e2e needs Postgres (database everfit_test, created on first start)
 npm run test:e2e            # migrates, wipes and seeds everfit_test, then runs e2e tests
