@@ -253,16 +253,32 @@ Re-run with `npm run db:seed:demo && npm run build && npm run db:explain` (the a
 - **Offset, not IANA timezone.** Correct for the logged moment, but we cannot re-derive local time under a different DST rule.
 - **Zero tolerance for future timestamps.** A client clock running ahead can get a 400 for "now".
 - **Denormalized set columns** trade some write cost and storage for join-free, index-backed top-1 PR lookups.
+- **Unknown exercise names are added to the shared catalog.** Simple, and enough for one team; at scale this needs per-client custom exercises (see below).
+- **Filters that match few entries** walk the client's history index (13.8 ms worst case at 50,000 entries). Fine for the target; the fix is a query change, described below.
 
 ## Scaling to 10,000 concurrent coaches
 
 - **Connections:** run several stateless app instances behind a load balancer, with PgBouncer in transaction mode in front of Postgres.
 - **Reads:** route history and PR queries to read replicas. Writes stay on the primary.
 - **Hot data:** cache PR responses per `(user, exercise, range)` in Redis and invalidate them on writes for that user and exercise. Optionally maintain a small "all-time PR" table asynchronously.
-- **Data growth:** partition `workout_sets` and `workout_entries` by hash of `user_id`. Every query is per user, so partitions prune well. Archive old partitions to cheaper storage.
 - **Write path:** keep logging synchronous, but move side effects (PR notifications, analytics, exports) to a queue (e.g. BullMQ or SQS) via an outbox table. Large historical imports go through a background job.
 - **Protection:** rate limit per user and coach, enforce request size limits, set timeouts and statement timeouts.
 - **Observability:** add metrics (p95 latency per endpoint, DB pool usage, slow queries via `pg_stat_statements`) next to the request-id logs, and alert on error rate.
+
+### Data and queries at 50 million entries
+
+Assume millions of clients, 50 million entries in total (about 175 million sets), some clients with ten years of history, and a much larger exercise catalog.
+
+**What still holds:** a client training five or six exercises a day for ten years has about 18,000 entries, fewer than the 50,000 measured above. Every index starts with `user_id`, so per-client queries stay as measured (history, deep cursor and PRs under 1 ms); a larger table adds about one B-tree level.
+
+**What I would change, in order:**
+
+1. **Per-client custom exercises.** Unknown exercise names are currently added to one shared catalog. With millions of clients that catalog fills with near-duplicates ("squat", "pause squat", typos) that everyone sees. Add `exercises.owner_user_id` (null for the curated catalog) with unique `(owner_user_id, name_normalized)`; history and PRs resolve names against the curated catalog plus the client's own exercises. This is a data-correctness change and gets harder the longer it waits.
+2. **Resolve exercise ids before reading history.** An exercise or muscle-group filter that matches few of a client's entries walks the history index until `limit` matches are found (13.8 ms for a filter matching nothing at 50k entries, growing linearly). Resolve the matching exercise ids first (return early when there are none) and read each exercise's entries through the existing unique key `(user_id, exercise_id, performed_at)`, then merge. Cost then depends on the number of exercises times `limit`, not on history size. No new index is needed; an extra `(user_id, exercise_id, performed_at DESC, id DESC)` index was measured and rejected.
+3. **Partition `workout_entries` and `workout_sets` by hash of `user_id`** (32–64 partitions). At the measured ratios (42 MB of sets and 61 MB of PR indexes per 175,000 sets) 175 million sets come to roughly 42 GB of table and 60 GB of PR indexes, which no longer fit in memory. Every query is per client, so partitions prune well, indexes per partition stay small, vacuum runs per partition, and the layout maps directly onto sharding by `user_id` (e.g. Citus) later.
+4. **Trigram index for name search** (`pg_trgm` GIN on `exercises.name_normalized`) once the catalog has tens of thousands of rows; `LIKE '%…%'` is a scan of a 31-row table today.
+5. **Planner statistics.** Statistics are averaged over all clients, so a heavy and a light client can get the same plan. Raise the statistics target on `user_id` and `exercise_id`, and catch regressions with `auto_explain`.
+6. **Monthly PR summary table** `(user_id, exercise_id, month)` with the best weight, volume and 1RM, updated in the logging transaction (entries are immutable, so it never needs recomputing). Range PRs then read a few rows regardless of planner choices, and the three PR indexes on `workout_sets` (six B-trees updated per set today) could be dropped to cut write cost.
 
 ## AI-assisted workflow
 
