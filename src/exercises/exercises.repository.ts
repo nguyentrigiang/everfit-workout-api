@@ -45,4 +45,13 @@ export class ExercisesRepository {
       rows.map((r) => [r.name_normalized, { id: r.id, name: r.name }]),
     );
   }
+
+  /** All muscle group slugs in display order (used to validate filters). */
+  async listMuscleGroupSlugs(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.muscleGroup.findMany({
+      select: { slug: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => r.slug);
+  }
 }
