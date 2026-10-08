@@ -6,6 +6,7 @@ import type { Transaction } from '../../../shared/database/transaction.js';
 import { encodeCursor } from '../../../modules/workout/services/history-cursor.js';
 import { ExerciseRepository } from '../../../modules/exercise/repositories/exercise.repository.js';
 import { PersonalRecordRepository } from '../../../modules/workout/repositories/personal-record.repository.js';
+import { PrismaWorkoutRepository } from '../../../modules/workout/repositories/prisma-workout.repository.js';
 import { WorkoutRepository } from '../../../modules/workout/repositories/workout.repository.js';
 import { percentile, type PlanSummary, summarizePlan } from './perf-report.js';
 
@@ -119,7 +120,7 @@ function combine(plans: string[][]): PlanSummary {
 
 async function buildScenarios(prisma: PrismaClient): Promise<Scenario[]> {
   // Standalone script outside Nest DI: the repositories only need the client.
-  const workouts = new WorkoutRepository(prisma);
+  const workouts = new PrismaWorkoutRepository(prisma);
   const records = new PersonalRecordRepository(prisma);
   const exercises = new ExerciseRepository(prisma);
 
