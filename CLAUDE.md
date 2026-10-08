@@ -37,8 +37,8 @@ bulk-log workouts, query history, compute personal records (PRs).
 
 ## Architecture
 
-- Business modules in `src/modules/`: `workout` (logging, history, personal records, unit conversion) and `exercise` (catalog, muscle groups). Inside each: `controllers/`, `services/`, `repositories/`, `dto/`, `domain/`. See `docs/ARCHITECTURE_BRIEF.md`.
-- `src/shared/`: errors and Swagger response decorators only. `src/infrastructure/`: HTTP pipeline, config, logging, Prisma, seed and perf scripts. Modules never import `infrastructure/http`.
+- Business modules in `src/modules/`: `workout` (logging, history, personal records, unit conversion) and `exercise` (catalog, muscle groups). Inside each, only the layers it needs: `workout` has `controllers/`, `services/`, `repositories/`, `dto/`, `domain/`; `exercise` has `repositories/` and `domain/`. See `docs/ARCHITECTURE_BRIEF.md`.
+- `src/shared/`: errors, Swagger response decorators and the `TransactionRunner` contract only. `src/infrastructure/`: HTTP pipeline, config, logging, Prisma, seed and perf scripts. Modules never import `infrastructure/http`.
 - Controllers: HTTP only (DTOs, params, response mapping). No business logic.
 - Services: business logic. Repositories / Prisma access isolated from controllers.
 - Everything injected via Nest DI. No `new SomeService()` in business code.
@@ -71,7 +71,8 @@ bulk-log workouts, query history, compute personal records (PRs).
 
 ## Testing
 
-- Every feature ships with tests in the same change.
+- Every feature ships with tests in the same change. Run `npm run typecheck` as well: Vitest does not type-check.
+- Unit specs sit next to the code; e2e specs mirror the source layout (`test/modules/<module>`, `test/infrastructure/...`).
 - Unit tests: unit conversion, Epley, PR selection logic, cursor encode/decode.
 - E2E tests: each endpoint + edge cases (invalid unit, negative weight/reps, null date, empty sets, empty date range, idempotent retry, concurrent writes).
 - Test names describe behavior (`returns 400 when sets array is empty`), not implementation.

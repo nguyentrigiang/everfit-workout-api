@@ -57,40 +57,85 @@ This adds `perf-user` with 50,000 entries and `demo-user-01` … `demo-user-20` 
 
 ## Architecture
 
+A modular monolith: code is grouped by business capability first and by technical layer second, so each domain can grow (or later be extracted into its own service) without mixing with the others. The rules are in [`docs/ARCHITECTURE_BRIEF.md`](docs/ARCHITECTURE_BRIEF.md).
+
 ```mermaid
 flowchart LR
-  Client -->|HTTP JSON| MW
+  Client -->|HTTP JSON| HTTP
 
-  subgraph NestJS app
-    MW["pino-http<br/>request id + access log"] --> Pipe["ValidationPipe<br/>DTOs, whitelist"]
-    Pipe --> Ctrl["Controllers<br/>workouts · records"]
-    Ctrl --> Svc["Services<br/>business rules"]
-    Svc --> Units["UnitConverter<br/>unit registry, decimal.js"]
-    Svc --> Repo["Repositories<br/>raw SQL via Prisma"]
-    Filter["AllExceptionsFilter<br/>one error shape"]
+  subgraph infra_http["infrastructure/http"]
+    HTTP["pino-http · ValidationPipe<br/>AllExceptionsFilter"]
   end
 
-  Repo -->|"pg driver adapter"| PG[(PostgreSQL 18)]
-  Seed["Seed on start<br/>config/exercises.json"] --> PG
+  subgraph workout["modules/workout"]
+    WC["WorkoutController<br/>PersonalRecordController"] --> WS["WorkoutService<br/>PersonalRecordService"]
+    WS --> Domain["domain/<br/>units, strength metrics, time"]
+    WS --> WR["WorkoutRepository<br/>(abstract)"]
+    WS --> PRR["PersonalRecordRepository"]
+    PWR["PrismaWorkoutRepository"]
+  end
+
+  subgraph exercise["modules/exercise"]
+    ER["ExerciseRepository"]
+  end
+
+  subgraph shared["shared"]
+    TR["TransactionRunner<br/>(abstract)"]
+  end
+
+  subgraph infra_db["infrastructure/database"]
+    PTR["PrismaTransactionRunner"]
+    Base["PrismaRepository<br/>(base class)"]
+  end
+
+  HTTP --> WC
+  WS --> ER
+  WS --> TR
+  PWR -. implements .-> WR
+  PTR -. extends .-> TR
+  PWR -. extends .-> Base
+  PRR -. extends .-> Base
+  ER -. extends .-> Base
+  Base --> PG[(PostgreSQL 18)]
+  Seed["seed on start<br/>config/exercises.json"] --> PG
 ```
 
-| Module | Responsibility |
-|---|---|
-| `workouts` | Bulk logging and history (controller, service, repository, DTOs, strength metrics) |
-| `records` | Personal records and range comparison |
-| `exercises` | Exercise catalog lookups, name normalization, auto-create |
-| `units` | Unit registry and `UnitConverter` (the only place conversion happens) |
-| `common` | Error codes, `AppException`, exception filter, validation factory, cursor, date parsing |
-| `config` | Env validation (fails fast) and logger setup |
-| `prisma` | `PrismaService` (Prisma 7, pg adapter) |
-| `database/seed` | Validated, insert-only catalog seed |
+```text
+src/
+├── modules/                 business capabilities
+│   ├── workout/             logging, history, personal records, unit conversion
+│   │   ├── controllers/     HTTP only: DTOs in, response shapes out
+│   │   ├── services/        business rules and orchestration
+│   │   ├── repositories/    WorkoutRepository contract + Prisma implementations
+│   │   ├── dto/             requests/, responses/, validators/
+│   │   └── domain/          pure logic: unit registry and converter, Epley, time parsing
+│   └── exercise/            exercise catalog, muscle groups, name normalization
+├── shared/                  kept small: errors, Swagger response decorators, transaction contract
+└── infrastructure/          HTTP pipeline, config, logging, Prisma, seed and perf scripts
+```
 
-Controllers only handle HTTP. Services hold the business rules. Repositories own the SQL. Everything is wired through Nest DI.
+| Area | Responsibility |
+|---|---|
+| `modules/workout` | Bulk logging, history with filters and cursor pagination, personal records and comparisons. Owns unit conversion, since only this domain uses it |
+| `modules/exercise` | Exercise catalog lookups, name normalization, auto-create, muscle-group filters |
+| `shared` | `AppException` and error codes, Swagger error decorators, the `TransactionRunner` contract |
+| `infrastructure` | HTTP pipeline (logging, validation, exception filter, Swagger setup), validated config, Prisma client, transaction runner, base repository, seed and performance scripts |
+
+Dependencies point one way: `workout` uses `exercise`, never the reverse, and business modules never import `infrastructure/http`. `app.module.ts` wires everything through Nest DI.
+
+**Design principles (SOLID, applied pragmatically):**
+- **Single responsibility:** controllers handle HTTP, services hold business rules, repositories own SQL, and `domain/` is plain logic with no framework imports.
+- **Open/closed:** adding a unit (stone) is one registry entry; adding another workout persistence implementation is a new class, not a change to `WorkoutService`.
+- **Liskov substitution:** `WorkoutRepository` documents its contract (natural-key idempotency, ordering, `limit + 1`); the Prisma implementation and the unit-test doubles honor it.
+- **Interface segregation:** `TransactionRunner` has one method; `WorkoutRepository` exposes only the five operations the service uses.
+- **Dependency inversion:** services depend on `TransactionRunner` and `WorkoutRepository`, not on Prisma. Writes take the transaction as a required argument, so a write cannot silently run outside it.
+
+Abstractions exist only where they mark a real boundary; the personal-record and exercise repositories stay concrete classes that share a small `PrismaRepository` base.
 
 **Bulk log request flow:**
 1. The DTO validates the whole body: offset datetimes not in the future, limits, units from the registry. Any error rejects the entire request with 400.
-2. The service normalizes exercise names, converts weights to kg and computes volume and Epley 1RM per set. This step is pure code, with no DB access.
-3. In one transaction, missing exercises are created (`ON CONFLICT DO NOTHING`), then entries are inserted in a fixed order with `ON CONFLICT (user_id, exercise_id, performed_at) DO NOTHING`.
+2. `WorkoutService` normalizes exercise names, converts weights to kg and computes volume and Epley 1RM per set. This step is pure code, with no DB access.
+3. Inside one `TransactionRunner.run`, missing exercises are created (`ON CONFLICT DO NOTHING`), then entries are inserted in a fixed order with `ON CONFLICT (user_id, exercise_id, performed_at) DO NOTHING`.
 4. Entries that already existed are reported as `duplicate`. Sets are inserted only for new entries, and their denormalized columns are copied from the entry row in SQL.
 5. The response is `201` if anything was created, or `200` if every entry was a duplicate.
 
@@ -199,7 +244,7 @@ npm run test:e2e            # migrates, wipes and seeds everfit_test, then runs 
 npm run docs:check          # validates the OpenAPI document of a running built app
 ```
 
-- **Unit (104):** unit conversion (incl. adding `stone`), Epley and volume (incl. rounding pitfalls), decimal rounding, date and offset parsing, cursor encoding, env validation, log serializers, exception filter, validation error paths, catalog config validation, bulk-logging status counting, demo data generator (determinism, validation limits, local dates), EXPLAIN plan parsing and percentiles.
+- **Unit (105):** unit conversion (incl. adding `stone`), Epley and volume (incl. rounding pitfalls), decimal rounding, date and offset parsing, cursor encoding, env validation, log serializers, exception filter, validation error paths, catalog config validation, bulk-logging status counting and single-transaction writes, demo data generator (determinism, validation limits, local dates), EXPLAIN plan parsing and percentiles.
 - **E2E (87):** every endpoint through the real HTTP pipeline and Postgres:
   - logging in mixed units, auto-created exercises
   - idempotent retries, concurrent identical and reversed-order requests
@@ -209,6 +254,8 @@ npm run docs:check          # validates the OpenAPI document of a running built 
   - DB constraints (unique, cascade, CHECK) and UUIDv7 keys
   - demo seeding (batches, copied set columns, re-run and resume after a partial run)
   - the largest valid bulk request
+
+E2E tests are grouped like the code: `test/modules/workout` (endpoints) and `test/infrastructure` (database constraints, seeds, HTTP pipeline, Swagger).
 
 Tests are named by behavior and assert exact values computed by hand, never re-computed with the implementation's formula.
 

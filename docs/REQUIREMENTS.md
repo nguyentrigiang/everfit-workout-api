@@ -38,8 +38,9 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done. Add evidence (file / test / c
 
 ## Architecture
 
-- [ ] A1 New unit (e.g. stone) = minimal change (registry)
-- [ ] A2 Exercise → muscle group mapping configurable
+- [x] A1 New unit (e.g. stone) = minimal change (registry) — src/modules/workout/domain/units/unit-registry.ts; unit-converter.spec.ts adds stone
+- [x] A2 Exercise → muscle group mapping configurable — config/exercises.json + insert-only seed
+- [x] A3 Modular monolith per docs/ARCHITECTURE_BRIEF.md (business modules, small shared/, isolated infrastructure/, pragmatic SOLID) — b4b46bb, c6bf1a4, 8b945c5, 2faf53d
 
 ## Production readiness
 
