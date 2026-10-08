@@ -2,7 +2,7 @@ import {
   MAX_REPS,
   MAX_SETS_PER_ENTRY,
   MAX_WEIGHT,
-} from '../../workouts/dto/log-workouts.dto.js';
+} from '../../modules/workout/dto/requests/log-workouts.dto.js';
 import {
   createRng,
   type GenerateOptions,

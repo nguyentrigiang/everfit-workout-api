@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../../../generated/prisma/client.js';
 
 export interface NewEntryRow {
   exerciseId: string;
@@ -46,7 +46,7 @@ const toStored = (r: EntryRecord): StoredEntryRow => ({
 
 /** Raw SQL for bulk workout writes. One statement per table, bind parameters only. */
 @Injectable()
-export class WorkoutsRepository {
+export class WorkoutRepository {
   /**
    * Inserts entries; rows that hit the natural key (user, exercise, performed_at)
    * are skipped by the unique index and are not returned (idempotent, race-safe).
@@ -129,7 +129,7 @@ export class WorkoutsRepository {
     const conditions: Prisma.Sql[] = [Prisma.sql`e.user_id = ${params.userId}`];
 
     if (params.exerciseIds) {
-      // Resolved from the catalog beforehand (see ExercisesRepository.findIdsForFilter).
+      // Resolved from the catalog beforehand (see ExerciseRepository.findIdsForFilter).
       conditions.push(
         Prisma.sql`e.exercise_id = ANY(${params.exerciseIds}::uuid[])`,
       );

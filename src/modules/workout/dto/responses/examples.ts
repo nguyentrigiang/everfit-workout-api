@@ -1,5 +1,5 @@
 // Response examples for Swagger, taken from real responses of the running API.
-import { encodeCursor } from '../common/pagination/cursor.js';
+import { encodeCursor } from '../../../../common/pagination/cursor.js';
 
 const entryId = '7b7e7eb5-5b90-4475-980d-1e59309d8207';
 const exercise = {

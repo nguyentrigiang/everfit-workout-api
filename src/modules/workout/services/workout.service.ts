@@ -2,65 +2,34 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   AppException,
   type ErrorDetail,
-} from '../common/errors/app.exception.js';
-import { ErrorCode } from '../common/errors/error-code.js';
-import { toApiNumber } from '../common/decimal.js';
-import { decodeCursor, encodeCursor } from '../common/pagination/cursor.js';
-import { parseOffsetDateTime } from '../common/time/offset-datetime.js';
-import { normalizeExerciseName } from '../exercises/exercise-name.js';
-import { ExercisesRepository } from '../exercises/exercises.repository.js';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { UnitConverter } from '../units/unit-converter.js';
-import type { ListWorkoutsQuery } from './dto/list-workouts.query.js';
-import type { LogWorkoutsDto } from './dto/log-workouts.dto.js';
-import { computeSetMetrics } from './strength-metrics.js';
+} from '../../../common/errors/app.exception.js';
+import { ErrorCode } from '../../../common/errors/error-code.js';
+import { toApiNumber } from '../../../common/decimal.js';
+import {
+  decodeCursor,
+  encodeCursor,
+} from '../../../common/pagination/cursor.js';
+import { parseOffsetDateTime } from '../../../common/time/offset-datetime.js';
+import { normalizeExerciseName } from '../../exercise/domain/exercise-name.js';
+import { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
+import { PrismaService } from '../../../prisma/prisma.service.js';
+import { UnitConverter } from '../domain/units/unit-converter.js';
+import type { ListWorkoutsQuery } from '../dto/requests/list-workouts.query.js';
+import type { LogWorkoutsDto } from '../dto/requests/log-workouts.dto.js';
+import { computeSetMetrics } from '../domain/strength-metrics.js';
 import {
   type NewSetRow,
   type StoredEntryRow,
-  WorkoutsRepository,
-} from './workouts.repository.js';
-
-export type EntryStatus = 'created' | 'duplicate';
-
-export interface LoggedEntry {
-  index: number;
-  id: string;
-  status: EntryStatus;
-  exercise: { id: string; name: string };
-  performedAt: string;
-  localDate: string;
-  setCount: number;
-}
-
-export interface HistorySet {
-  setIndex: number;
-  reps: number;
-  weight: number;
-  unit: string;
-  volume: number;
-  e1rm: number;
-}
-
-export interface HistoryEntry {
-  id: string;
-  exercise: { id: string; name: string; muscleGroups: string[] };
-  performedAt: string;
-  localDate: string;
-  sets: HistorySet[];
-}
-
-export interface HistoryPage {
-  data: HistoryEntry[];
-  pagination: { limit: number; hasMore: boolean; nextCursor: string | null };
-  message?: string;
-}
-
-export const NO_WORKOUTS_MESSAGE = 'No workouts found for the given filters';
-
-export interface LogWorkoutsResult {
-  entries: LoggedEntry[];
-  summary: { created: number; duplicates: number };
-}
+  WorkoutRepository,
+} from '../repositories/workout.repository.js';
+import {
+  type EntryStatus,
+  type HistoryPage,
+  type HistorySet,
+  type LoggedEntry,
+  type LogWorkoutsResult,
+  NO_WORKOUTS_MESSAGE,
+} from '../dto/responses/workout.responses.js';
 
 interface PreparedEntry {
   index: number;
@@ -76,11 +45,11 @@ const naturalKey = (exerciseId: string, performedAt: Date) =>
   `${exerciseId}|${performedAt.getTime()}`;
 
 @Injectable()
-export class WorkoutsService {
+export class WorkoutService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly exercises: ExercisesRepository,
-    private readonly workouts: WorkoutsRepository,
+    private readonly exercises: ExerciseRepository,
+    private readonly workouts: WorkoutRepository,
     private readonly units: UnitConverter,
   ) {}
 

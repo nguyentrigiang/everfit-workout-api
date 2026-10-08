@@ -1,61 +1,26 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
-import { toApiNumber } from '../common/decimal.js';
+import { toApiNumber } from '../../../common/decimal.js';
 import {
   AppException,
   type ErrorDetail,
-} from '../common/errors/app.exception.js';
-import { ErrorCode } from '../common/errors/error-code.js';
-import { ExercisesRepository } from '../exercises/exercises.repository.js';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { UnitConverter } from '../units/unit-converter.js';
-import type { RecordsQuery } from './dto/records.query.js';
+} from '../../../common/errors/app.exception.js';
+import { ErrorCode } from '../../../common/errors/error-code.js';
+import { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
+import { PrismaService } from '../../../prisma/prisma.service.js';
+import { UnitConverter } from '../domain/units/unit-converter.js';
+import type { PersonalRecordsQuery } from '../dto/requests/personal-records.query.js';
 import {
   type RecordMetric,
   type RecordRow,
-  RecordsRepository,
-} from './records.repository.js';
-
-export interface PersonalRecord {
-  value: number;
-  reps: number;
-  weight: number;
-  performedAt: string;
-  localDate: string;
-  entryId: string;
-  setIndex: number;
-}
-
-export interface RecordSet {
-  heaviestWeight: PersonalRecord | null;
-  highestVolume: PersonalRecord | null;
-  bestEstimated1RM: PersonalRecord | null;
-}
-
-export type RecordDifference = Record<keyof RecordSet, number | null>;
-
-interface DateRange {
-  from: string | null;
-  to: string | null;
-}
-
-export interface RecordsResult {
-  data: {
-    exercise: { id: string; name: string };
-    unit: string;
-    range: DateRange;
-    records: RecordSet;
-    comparison?: {
-      range: DateRange;
-      records: RecordSet;
-      difference: RecordDifference;
-    };
-  };
-  message?: string;
-}
-
-export const NO_RECORDS_MESSAGE =
-  'No workouts found for this exercise in the given range';
+  PersonalRecordRepository,
+} from '../repositories/personal-record.repository.js';
+import {
+  NO_RECORDS_MESSAGE,
+  type RecordDifference,
+  type RecordSet,
+  type RecordsResult,
+} from '../dto/responses/personal-record.responses.js';
 
 const KEY_BY_METRIC: Record<RecordMetric, keyof RecordSet> = {
   weight: 'heaviestWeight',
@@ -64,17 +29,17 @@ const KEY_BY_METRIC: Record<RecordMetric, keyof RecordSet> = {
 };
 
 @Injectable()
-export class RecordsService {
+export class PersonalRecordService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly exercises: ExercisesRepository,
-    private readonly records: RecordsRepository,
+    private readonly exercises: ExerciseRepository,
+    private readonly records: PersonalRecordRepository,
     private readonly units: UnitConverter,
   ) {}
 
   async getRecords(
     userId: string,
-    query: RecordsQuery,
+    query: PersonalRecordsQuery,
   ): Promise<RecordsResult> {
     this.validateRanges(query);
 
@@ -162,7 +127,7 @@ export class RecordsService {
     return toApiNumber(this.units.fromKg(kg.toString(), unit));
   }
 
-  private validateRanges(query: RecordsQuery): void {
+  private validateRanges(query: PersonalRecordsQuery): void {
     const details: ErrorDetail[] = [];
     if (query.from && query.to && query.from > query.to) {
       details.push({ field: 'from', message: 'from must not be after to' });

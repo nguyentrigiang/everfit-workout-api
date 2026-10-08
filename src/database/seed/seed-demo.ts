@@ -1,12 +1,12 @@
 import type { PrismaClient } from '../../generated/prisma/client.js';
-import { normalizeExerciseName } from '../../exercises/exercise-name.js';
-import { UnitConverter } from '../../units/unit-converter.js';
-import { DEFAULT_UNIT_REGISTRY } from '../../units/unit-registry.js';
-import { computeSetMetrics } from '../../workouts/strength-metrics.js';
+import { normalizeExerciseName } from '../../modules/exercise/domain/exercise-name.js';
+import { UnitConverter } from '../../modules/workout/domain/units/unit-converter.js';
+import { DEFAULT_UNIT_REGISTRY } from '../../modules/workout/domain/units/unit-registry.js';
+import { computeSetMetrics } from '../../modules/workout/domain/strength-metrics.js';
 import {
   type NewSetRow,
-  WorkoutsRepository,
-} from '../../workouts/workouts.repository.js';
+  WorkoutRepository,
+} from '../../modules/workout/repositories/workout.repository.js';
 import {
   createRng,
   type DemoEntry,
@@ -54,9 +54,9 @@ export async function seedDemoWorkouts(
   const { batchSize = 2000, log = () => {} } = options;
   const exerciseIds = await resolveExerciseIds(prisma, options.exerciseNames);
   // Standalone script outside Nest DI: build the same instances the app injects
-  // (UnitsModule uses this registry; the repository has no dependencies).
+  // (WorkoutModule uses this registry; the repository has no dependencies).
   const units = new UnitConverter(DEFAULT_UNIT_REGISTRY);
-  const workouts = new WorkoutsRepository();
+  const workouts = new WorkoutRepository();
   const result: DemoSeedResult = {
     seededUsers: [],
     skippedUsers: [],
@@ -105,7 +105,7 @@ export async function seedDemoWorkouts(
 
 async function insertBatch(
   prisma: PrismaClient,
-  workouts: WorkoutsRepository,
+  workouts: WorkoutRepository,
   units: UnitConverter,
   userId: string,
   batch: DemoEntry[],

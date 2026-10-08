@@ -10,7 +10,10 @@ import {
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { ApiErrorResponse, ApiExampleResponse } from '../docs/api-responses.js';
+import {
+  ApiErrorResponse,
+  ApiExampleResponse,
+} from '../../../docs/api-responses.js';
 import {
   HISTORY_CURSOR_ERROR_EXAMPLE,
   HISTORY_EMPTY_EXAMPLE,
@@ -20,14 +23,17 @@ import {
   LOG_DUPLICATE_EXAMPLE,
   LOG_REQUEST_EXAMPLE,
   LOG_VALIDATION_ERROR_EXAMPLE,
-} from '../docs/examples.js';
-import { ListWorkoutsQuery } from './dto/list-workouts.query.js';
-import { LogWorkoutsDto, UserParamsDto } from './dto/log-workouts.dto.js';
+} from '../dto/responses/examples.js';
+import { ListWorkoutsQuery } from '../dto/requests/list-workouts.query.js';
 import {
-  type HistoryPage,
-  type LogWorkoutsResult,
-  WorkoutsService,
-} from './workouts.service.js';
+  LogWorkoutsDto,
+  UserParamsDto,
+} from '../dto/requests/log-workouts.dto.js';
+import type {
+  HistoryPage,
+  LogWorkoutsResult,
+} from '../dto/responses/workout.responses.js';
+import { WorkoutService } from '../services/workout.service.js';
 
 @ApiTags('workouts')
 @ApiParam({
@@ -36,8 +42,8 @@ import {
   description: '1-64 chars: letters, digits, _ or -',
 })
 @Controller('users/:userId/workouts')
-export class WorkoutsController {
-  constructor(private readonly workouts: WorkoutsService) {}
+export class WorkoutController {
+  constructor(private readonly workouts: WorkoutService) {}
 
   /** Bulk log. 201 if anything was created, 200 if every entry already existed (retry). */
   @Post()

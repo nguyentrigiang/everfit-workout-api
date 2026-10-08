@@ -3,7 +3,7 @@ import type { UnitRegistry } from './unit-registry.js';
 
 /**
  * Converts weights between units via kg, using exact decimal arithmetic.
- * The app always uses DEFAULT_UNIT_REGISTRY (see UnitsModule), the same source as
+ * The app always uses DEFAULT_UNIT_REGISTRY (see WorkoutModule), the same source as
  * request validation; the constructor argument exists so tests can pass another registry.
  */
 export class UnitConverter {

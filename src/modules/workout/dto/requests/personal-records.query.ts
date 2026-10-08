@@ -1,10 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsIn, IsOptional, IsString, Length } from 'class-validator';
-import { IsCalendarDate } from '../../common/time/calendar-date.js';
-import { SUPPORTED_UNITS, type WeightUnit } from '../../units/unit-registry.js';
+import { IsCalendarDate } from '../../../../common/time/calendar-date.js';
+import {
+  SUPPORTED_UNITS,
+  type WeightUnit,
+} from '../../domain/units/unit-registry.js';
 
-export class RecordsQuery {
+export class PersonalRecordsQuery {
   /** Exercise name; matched exactly on the normalized form. */
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,

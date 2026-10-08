@@ -1,5 +1,5 @@
-import { DEFAULT_UNIT_REGISTRY } from '../units/unit-registry.js';
-import { UnitConverter } from '../units/unit-converter.js';
+import { DEFAULT_UNIT_REGISTRY } from './units/unit-registry.js';
+import { UnitConverter } from './units/unit-converter.js';
 import {
   computeSetMetrics,
   estimateOneRepMax,

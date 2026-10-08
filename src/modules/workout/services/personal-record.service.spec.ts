@@ -1,8 +1,8 @@
-import {
-  difference,
-  type PersonalRecord,
-  type RecordSet,
-} from './records.service.js';
+import type {
+  PersonalRecord,
+  RecordSet,
+} from '../dto/responses/personal-record.responses.js';
+import { difference } from './personal-record.service.js';
 
 const record = (value: number): PersonalRecord => ({
   value,
