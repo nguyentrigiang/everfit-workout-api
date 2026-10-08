@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
@@ -33,10 +34,12 @@ export class ListWorkoutsQuery {
   muscleGroup?: string;
 
   /** Inclusive, compared with the client's local calendar date. */
+  @ApiPropertyOptional({ format: 'date', example: '2026-10-01' })
   @IsOptional()
   @IsCalendarDate()
   from?: string;
 
+  @ApiPropertyOptional({ format: 'date', example: '2026-10-31' })
   @IsOptional()
   @IsCalendarDate()
   to?: string;
@@ -45,11 +48,18 @@ export class ListWorkoutsQuery {
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value,
   )
+  @ApiPropertyOptional({ enum: SUPPORTED_UNITS, default: 'kg' })
   @IsIn(SUPPORTED_UNITS, {
     message: `unit must be one of: ${SUPPORTED_UNITS.join(', ')}`,
   })
   unit: WeightUnit = 'kg';
 
+  @ApiPropertyOptional({
+    type: 'integer',
+    default: DEFAULT_PAGE_SIZE,
+    minimum: 1,
+    maximum: MAX_PAGE_SIZE,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

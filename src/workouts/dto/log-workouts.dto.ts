@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -33,6 +34,7 @@ export class UserParamsDto {
 }
 
 export class WorkoutSetDto {
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: MAX_REPS, example: 5 })
   @IsInt()
   @Min(1)
   @Max(MAX_REPS)
@@ -48,6 +50,7 @@ export class WorkoutSetDto {
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value,
   )
+  @ApiProperty({ enum: SUPPORTED_UNITS, example: 'kg' })
   @IsIn(SUPPORTED_UNITS, {
     message: `unit must be one of: ${SUPPORTED_UNITS.join(', ')}`,
   })
@@ -55,6 +58,8 @@ export class WorkoutSetDto {
 }
 
 export class WorkoutEntryDto {
+  /** ISO 8601 datetime with UTC offset; must not be in the future. */
+  @ApiProperty({ example: '2026-10-05T18:00:00+07:00' })
   @IsDefined()
   @IsOffsetDateTime()
   @IsNotInFuture()
@@ -67,6 +72,11 @@ export class WorkoutEntryDto {
   @Length(1, 100)
   exerciseName: string;
 
+  @ApiProperty({
+    type: [WorkoutSetDto],
+    minItems: 1,
+    maxItems: MAX_SETS_PER_ENTRY,
+  })
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(MAX_SETS_PER_ENTRY)
@@ -76,6 +86,11 @@ export class WorkoutEntryDto {
 }
 
 export class LogWorkoutsDto {
+  @ApiProperty({
+    type: [WorkoutEntryDto],
+    minItems: 1,
+    maxItems: MAX_ENTRIES_PER_REQUEST,
+  })
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(MAX_ENTRIES_PER_REQUEST)
