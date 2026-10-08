@@ -4,11 +4,14 @@ import {
   type ErrorDetail,
 } from '../common/errors/app.exception.js';
 import { ErrorCode } from '../common/errors/error-code.js';
+import { toApiNumber } from '../common/decimal.js';
+import { decodeCursor, encodeCursor } from '../common/pagination/cursor.js';
 import { parseOffsetDateTime } from '../common/time/offset-datetime.js';
 import { normalizeExerciseName } from '../exercises/exercise-name.js';
 import { ExercisesRepository } from '../exercises/exercises.repository.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UnitConverter } from '../units/unit-converter.js';
+import type { ListWorkoutsQuery } from './dto/list-workouts.query.js';
 import type { LogWorkoutsDto } from './dto/log-workouts.dto.js';
 import { computeSetMetrics } from './strength-metrics.js';
 import {
@@ -28,6 +31,31 @@ export interface LoggedEntry {
   localDate: string;
   setCount: number;
 }
+
+export interface HistorySet {
+  setIndex: number;
+  reps: number;
+  weight: number;
+  unit: string;
+  volume: number;
+  e1rm: number;
+}
+
+export interface HistoryEntry {
+  id: string;
+  exercise: { id: string; name: string; muscleGroups: string[] };
+  performedAt: string;
+  localDate: string;
+  sets: HistorySet[];
+}
+
+export interface HistoryPage {
+  data: HistoryEntry[];
+  pagination: { limit: number; hasMore: boolean; nextCursor: string | null };
+  message?: string;
+}
+
+export const NO_WORKOUTS_MESSAGE = 'No workouts found for the given filters';
 
 export interface LogWorkoutsResult {
   entries: LoggedEntry[];
@@ -120,6 +148,104 @@ export class WorkoutsService {
         },
       };
     });
+  }
+
+  async listHistory(
+    userId: string,
+    query: ListWorkoutsQuery,
+  ): Promise<HistoryPage> {
+    if (query.from && query.to && query.from > query.to) {
+      throw new AppException(
+        HttpStatus.BAD_REQUEST,
+        ErrorCode.VALIDATION_ERROR,
+        'Validation failed',
+        [{ field: 'from', message: 'from must not be after to' }],
+      );
+    }
+    const after =
+      query.cursor !== undefined ? decodeCursor(query.cursor) : undefined;
+    const tx = this.prisma;
+    if (query.muscleGroup) {
+      await this.assertKnownMuscleGroup(query.muscleGroup);
+    }
+
+    const rows = await this.workouts.findHistoryPage({
+      tx,
+      userId,
+      exerciseSearch: query.exercise
+        ? normalizeExerciseName(query.exercise)
+        : undefined,
+      muscleGroup: query.muscleGroup,
+      from: query.from,
+      to: query.to,
+      after,
+      limit: query.limit,
+    });
+    const hasMore = rows.length > query.limit;
+    const page = hasMore ? rows.slice(0, query.limit) : rows;
+
+    const sets = await this.workouts.findSetsForEntries(
+      tx,
+      page.map((r) => r.id),
+    );
+    const setsByEntry = new Map<string, HistorySet[]>();
+    for (const s of sets) {
+      const list = setsByEntry.get(s.entry_id) ?? [];
+      list.push({
+        setIndex: s.set_index,
+        reps: s.reps,
+        weight: toApiNumber(
+          this.units.fromKg(s.weight_kg.toString(), query.unit),
+        ),
+        unit: query.unit,
+        volume: toApiNumber(
+          this.units.fromKg(s.volume_kg.toString(), query.unit),
+        ),
+        e1rm: toApiNumber(this.units.fromKg(s.e1rm_kg.toString(), query.unit)),
+      });
+      setsByEntry.set(s.entry_id, list);
+    }
+
+    const last = page.at(-1);
+    return {
+      data: page.map((r) => ({
+        id: r.id,
+        exercise: {
+          id: r.exercise_id,
+          name: r.exercise_name,
+          muscleGroups: r.muscle_groups,
+        },
+        performedAt: r.performed_at.toISOString(),
+        localDate: r.local_date,
+        sets: setsByEntry.get(r.id) ?? [],
+      })),
+      pagination: {
+        limit: query.limit,
+        hasMore,
+        nextCursor:
+          hasMore && last
+            ? encodeCursor({ performedAt: last.performed_at, id: last.id })
+            : null,
+      },
+      ...(page.length === 0 && { message: NO_WORKOUTS_MESSAGE }),
+    };
+  }
+
+  private async assertKnownMuscleGroup(slug: string): Promise<void> {
+    const slugs = await this.exercises.listMuscleGroupSlugs(this.prisma);
+    if (!slugs.includes(slug)) {
+      throw new AppException(
+        HttpStatus.BAD_REQUEST,
+        ErrorCode.VALIDATION_ERROR,
+        'Validation failed',
+        [
+          {
+            field: 'muscleGroup',
+            message: `muscleGroup must be one of: ${slugs.join(', ')}`,
+          },
+        ],
+      );
+    }
   }
 
   /** Pure preparation: parse time, normalize name, convert to kg, compute metrics. */

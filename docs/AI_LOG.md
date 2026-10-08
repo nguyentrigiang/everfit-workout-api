@@ -26,6 +26,8 @@ Tools: Claude Code (main session = implementer), a `domain-reviewer` subagent (r
 | A16 | API | Duplicate entries reported `setCount` from the request | Response claimed sets that were never stored | Reviewer subagent | Return stored count for duplicates | `7fe3785` |
 | A17 | Error handling | Error `path` from `req.url` | Express strips the global prefix: `/api/v1/x` reported as `/x` | E2E test after adding the prefix | Use `req.originalUrl` | `7fe3785` |
 | A18 | Testing | E2E test logged a workout on 2026-11-01 | That date was in the future, so validation correctly rejected it: the test was wrong, not the code | Test failure, investigated before "fixing" code | Fixed the test date | `7fe3785` |
+| A19 | SQL | `LIKE ... ESCAPE '\'` written inside a TS template literal | In a template literal `'\'` is just `'`: the SQL would have been `ESCAPE '')` (syntax error, or wildcards unescaped) | Self-review of the generated SQL before running | Write `'\\'` in source; e2e test that `exercise=%` matches nothing | history endpoint commit |
+| A20 | Testing | E2E suite reused a long-lived test DB | Rows from earlier runs (an auto-created `squat`, kept by the insert-only seed) made history tests fail on display names | E2E failure, traced to leftover data rather than code | Global setup truncates all tables (only if the DB name ends in `_test`) before seeding | history endpoint commit |
 
 ## B. AI suggestions rejected (by me or after review)
 

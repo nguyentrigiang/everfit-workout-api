@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 
 export interface NewEntryRow {
   exerciseId: string;
@@ -119,4 +119,115 @@ export class WorkoutsRepository {
       ) AS s(entry_id, set_index, reps, weight, unit, weight_kg, volume_kg, e1rm_kg)
       JOIN workout_entries e ON e.id = s.entry_id`;
   }
+
+  /**
+   * One page of history, newest first, keyset-paginated on (performed_at, id).
+   * Filters are composed with Prisma.sql fragments (bind parameters, no string concat).
+   * Fetches limit + 1 rows so the caller can tell whether another page exists.
+   */
+  async findHistoryPage(params: HistoryPageParams): Promise<HistoryEntryRow[]> {
+    const conditions: Prisma.Sql[] = [Prisma.sql`e.user_id = ${params.userId}`];
+
+    if (params.exerciseSearch) {
+      const pattern = `%${escapeLike(params.exerciseSearch)}%`;
+      conditions.push(Prisma.sql`e.exercise_id IN (
+        SELECT id FROM exercises WHERE name_normalized LIKE ${pattern} ESCAPE '\\')`);
+    }
+    if (params.muscleGroup) {
+      conditions.push(Prisma.sql`e.exercise_id IN (
+        SELECT emg.exercise_id FROM exercise_muscle_groups emg
+        JOIN muscle_groups mg ON mg.id = emg.muscle_group_id
+        WHERE mg.slug = ${params.muscleGroup})`);
+    }
+    if (params.from) {
+      // local_date gives the exact calendar match; the widened performed_at bound
+      // (max offset 14h) lets the (user_id, performed_at) index narrow the scan.
+      conditions.push(Prisma.sql`e.local_date >= ${params.from}::date`);
+      conditions.push(
+        Prisma.sql`e.performed_at >= ${shiftHours(params.from, -MAX_OFFSET_HOURS)}::timestamptz`,
+      );
+    }
+    if (params.to) {
+      conditions.push(Prisma.sql`e.local_date <= ${params.to}::date`);
+      conditions.push(
+        Prisma.sql`e.performed_at < ${shiftHours(params.to, 24 + MAX_OFFSET_HOURS)}::timestamptz`,
+      );
+    }
+    if (params.after) {
+      conditions.push(
+        Prisma.sql`(e.performed_at, e.id) < (${params.after.performedAt.toISOString()}::timestamptz, ${params.after.id}::uuid)`,
+      );
+    }
+
+    return params.tx.$queryRaw<HistoryEntryRow[]>`
+      SELECT e.id, e.performed_at, e.local_date::text AS local_date,
+             ex.id AS exercise_id, ex.name AS exercise_name,
+             COALESCE((
+               SELECT array_agg(mg.slug ORDER BY mg.sort_order)
+               FROM exercise_muscle_groups emg
+               JOIN muscle_groups mg ON mg.id = emg.muscle_group_id
+               WHERE emg.exercise_id = ex.id
+             ), '{}') AS muscle_groups
+      FROM workout_entries e
+      JOIN exercises ex ON ex.id = e.exercise_id
+      WHERE ${Prisma.join(conditions, ' AND ')}
+      ORDER BY e.performed_at DESC, e.id DESC
+      LIMIT ${params.limit + 1}`;
+  }
+
+  /** Sets for a page of entries in one query (no N+1). */
+  async findSetsForEntries(
+    tx: Prisma.TransactionClient,
+    entryIds: string[],
+  ): Promise<HistorySetRow[]> {
+    if (entryIds.length === 0) return [];
+    return tx.$queryRaw<HistorySetRow[]>`
+      SELECT entry_id, set_index, reps, weight_kg, volume_kg, e1rm_kg
+      FROM workout_sets
+      WHERE entry_id = ANY(${entryIds}::uuid[])
+      ORDER BY entry_id, set_index`;
+  }
+}
+
+const MAX_OFFSET_HOURS = 14;
+
+/** ISO instant for `date` 00:00 UTC shifted by `hours`. */
+function shiftHours(date: string, hours: number): string {
+  return new Date(
+    Date.parse(`${date}T00:00:00Z`) + hours * 3_600_000,
+  ).toISOString();
+}
+
+/** Escapes LIKE wildcards so user input matches literally. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+export interface HistoryPageParams {
+  tx: Prisma.TransactionClient;
+  userId: string;
+  exerciseSearch?: string;
+  muscleGroup?: string;
+  from?: string;
+  to?: string;
+  after?: { performedAt: Date; id: string };
+  limit: number;
+}
+
+export interface HistoryEntryRow {
+  id: string;
+  performed_at: Date;
+  local_date: string;
+  exercise_id: string;
+  exercise_name: string;
+  muscle_groups: string[];
+}
+
+export interface HistorySetRow {
+  entry_id: string;
+  set_index: number;
+  reps: number;
+  weight_kg: Prisma.Decimal;
+  volume_kg: Prisma.Decimal;
+  e1rm_kg: Prisma.Decimal;
 }
