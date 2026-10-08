@@ -109,6 +109,36 @@ describe('database schema constraints (e2e)', () => {
     expect(await prisma.workoutSet.count({ where: { entryId } })).toBe(0);
   });
 
+  it('generates time-ordered UUIDv7 primary keys', async () => {
+    const userId = randomUUID();
+    const [{ id: earlier }] = await insertEntry(
+      userId,
+      '2026-10-07T07:30:00+07:00',
+    );
+    // uuidv7() is only monotonic within one session; step past the millisecond.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const [{ id: later }] = await insertEntry(
+      userId,
+      '2026-10-06T07:30:00+07:00',
+    );
+    const [{ id: setId }] = await prisma.$queryRaw<{ id: string }[]>`
+      INSERT INTO workout_sets (entry_id, set_index, reps, weight, unit, weight_kg, volume_kg, e1rm_kg,
+                                user_id, exercise_id, performed_at, local_date)
+      VALUES (${later}::uuid, 0, 5, 100, 'kg', 100, 500, 116.667,
+              ${userId}, ${exerciseId}::uuid, '2026-10-06T00:30:00Z', '2026-10-06')
+      RETURNING id`;
+
+    const version = (id: string) => id.split('-')[2][0];
+    expect([exerciseId, earlier, later, setId].map(version)).toEqual([
+      '7',
+      '7',
+      '7',
+      '7',
+    ]);
+    // Ordered by insertion time, not by performed_at (the later insert is an earlier workout).
+    expect(later > earlier).toBe(true);
+  });
+
   it('rejects a set with non-positive reps at the database level', async () => {
     const userId = randomUUID();
     const [{ id: entryId }] = await insertEntry(
