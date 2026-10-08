@@ -22,6 +22,7 @@ bulk-log workouts, query history, compute personal records (PRs).
 - `docs/ASSIGNMENT.md` — the original assignment. Every change must serve something in it.
 - `docs/REQUIREMENTS.md` — checklist with requirement IDs (F1.1, E3, D9...) and status. Reference IDs in plans.
 - `docs/DECISIONS.md` — decisions made with the user. Do not re-ask or silently override them.
+- `docs/ARCHITECTURE_BRIEF.md` — how code is organized (modular monolith, business modules, domain-first folders, small `shared/`, isolated `infrastructure/`). Follow it for any new or moved code.
 - Before starting a feature, use the `grill-plan` skill. At the end of a work block, use `check-progress`.
 - If a request drifts from the assignment or exceeds the time budget, say so before doing it.
 - `docs/AI_LOG.md` — append an entry whenever AI output turns out wrong/suboptimal (test failure, reviewer finding, user correction) or an AI suggestion is rejected. Source for AI_WORKFLOW.md.
