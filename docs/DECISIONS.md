@@ -43,3 +43,33 @@ Decisions made with the user during planning. Feeds the README "design decisions
 - Decision: Every error uses one shape: `{ statusCode, code, error, message, details, path, timestamp, requestId }`. `code` is a stable machine-readable string (e.g. `VALIDATION_ERROR`, `NOT_FOUND`), `error` is the HTTP reason phrase. Unparsable JSON currently returns `BAD_REQUEST` (dedicated code tracked as backlog item B1). Validation errors return 400 with `details: [{ field, message }]`, where `field` is the full path into nested payloads (e.g. `entries[0].sets[2].weight`). Pipe and filter are registered through DI (`APP_PIPE`, `APP_FILTER`) so e2e tests run the same pipeline as production. 5xx responses never expose internals (message and details are masked for every exception type); the stack is only logged. Statuses without a dedicated code fall back to `BAD_REQUEST` (4xx) or `INTERNAL_ERROR` (5xx) so the code table stays fixed.
 - Alternatives: no `code` field; 422 for validation errors; field name only in details.
 - Why: Clients can branch on `code` instead of parsing messages, and the README can document a fixed error-code table. 400 is the NestJS default and what clients expect. Full paths tell a coach exactly which set in a bulk request is wrong.
+
+## 2026-10-08 — Database: PostgreSQL
+- Decision: PostgreSQL 16.
+- Alternatives: MongoDB.
+- Why: The workload is relational and aggregation-heavy. PR queries are top-1 lookups per user + exercise that map directly onto composite B-tree indexes; history filters join a small exercise catalog; bulk logging needs transactions and unique constraints. MongoDB's flexible schema is not needed (fixed data shape), and nested sets would need `$unwind` for PR queries.
+
+## 2026-10-08 — Time and timezone
+- Decision: Clients send `date` as an ISO 8601 datetime with offset (e.g. `2026-10-07T07:30:00+07:00`); it is required. Stored as `performed_at` (`timestamptz`, UTC) plus `local_date` (`date`, the client's calendar day) and `utc_offset_minutes`. Calendar questions ("PR this month vs last month") use `local_date`; ordering, pagination and time ranges use `performed_at`.
+- Alternatives: date + IANA timezone; date only treated as UTC.
+- Why: Unambiguous with no timezone database lookup. Date-only UTC would put a 6am workout on the 1st (UTC+7) into the previous month. Trade-off: the offset is a snapshot, not a timezone rule, so we cannot re-derive local time under a different DST rule (not needed here).
+
+## 2026-10-08 — Sets storage and PR strategy
+- Decision: Sets live in their own table `workout_sets`, one row per set. Each set stores the original `weight` + `unit` and precomputed `weight_kg`, `volume_kg` (reps × weight_kg) and `e1rm_kg` (Epley). `user_id`, `exercise_id`, `performed_at` and `local_date` are copied from the entry onto each set so PR queries (including calendar-range comparisons) need no join. Composite indexes `(user_id, exercise_id, <metric> DESC)` make each PR a single index lookup; `(user_id, exercise_id, local_date)` serves range comparisons. Normalized kg metrics are `numeric` with 6 decimals so lb→kg conversion is not rounded at write time (rounding only on output). Hand-written CHECK constraints (`reps > 0`, `weight >= 0`, offset range) back up request validation.
+- Alternatives: JSONB array of sets on the entry; computing metrics at query time; a separate PR table maintained on write.
+- Why: With 50k+ entries (~150–250k sets) per user, PRs must not scan all sets. Precomputed, indexed columns keep PR reads O(log n). Trade-offs: denormalized columns and slightly slower writes; acceptable because entries are immutable once logged. A maintained PR table was rejected: it adds write-time races and cannot answer arbitrary time-range comparisons. A composite foreign key forcing the copied columns to match the parent entry was also rejected (extra multi-column unique index and 5-column FK for little gain); instead sets take the copied values from the entry row returned by the insert, in a single code path covered by tests.
+
+## 2026-10-08 — Unknown exercise names
+- Decision: Logging an exercise that is not in the catalog creates it automatically with no muscle groups. Names are matched on a normalized form (trimmed, lowercased, collapsed spaces), unique in the DB.
+- Alternatives: reject with 400.
+- Why: Coaches are never blocked; the assignment says muscle group filtering applies "if exercise metadata is available". New exercises get muscle groups once added to the config.
+
+## 2026-10-08 — Idempotency and concurrent writes
+- Decision: Enforced in the database with a natural key: UNIQUE `(user_id, exercise_id, performed_at)` on `workout_entries`. Inserts use `INSERT ... ON CONFLICT DO NOTHING`; a duplicate is not re-inserted and the existing entry is returned, flagged as a duplicate in the response.
+- Alternatives: `Idempotency-Key` header table; client-generated entry ids; transactions only; overwriting sets on conflict; 409 Conflict.
+- Why: Matches the assignment's case ("same user logging same exercise at same time") and is race-free: the unique index decides, not a check-then-insert in code. Retries need nothing extra from the client because they resend the same `date`. Trade-off: two genuinely separate logs of the same exercise at the exact same timestamp collapse into one, which is acceptable because sets of one session belong in one entry.
+
+## 2026-10-08 — Muscle groups
+- Decision: Separate tables `muscle_groups (id, slug, name)` and `exercise_muscle_groups (exercise_id, muscle_group_id)`, seeded from a config file (not hardcoded in code).
+- Alternatives: `text[]` column on exercises; JSONB metadata.
+- Why: A future screen can list muscle groups with display names and let users pick one; foreign keys prevent typos. Performance is the same as an array because the catalog is small; the heavy part of filtered history is the `workout_entries` index.
