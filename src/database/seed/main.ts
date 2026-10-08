@@ -1,8 +1,7 @@
-import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../generated/prisma/client.js';
-import { validateCatalogConfig } from './catalog-config.js';
+import { loadCatalogConfig } from './catalog-config.js';
 import { seedCatalog } from './seed-catalog.js';
 
 // Standalone entry point: `npm run db:seed` locally, and on every container start.
@@ -20,15 +19,7 @@ async function main(): Promise<void> {
   const configPath = resolve(
     process.env.SEED_CONFIG_PATH ?? 'config/exercises.json',
   );
-  let raw: unknown;
-  try {
-    raw = JSON.parse(await readFile(configPath, 'utf8'));
-  } catch (error) {
-    throw new Error(
-      `Cannot read catalog config ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  const config = validateCatalogConfig(raw);
+  const config = await loadCatalogConfig(configPath);
 
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: databaseUrl }),
