@@ -24,6 +24,7 @@ bulk-log workouts, query history, compute personal records (PRs).
 - `docs/DECISIONS.md` — decisions made with the user. Do not re-ask or silently override them.
 - Before starting a feature, use the `grill-plan` skill. At the end of a work block, use `check-progress`.
 - If a request drifts from the assignment or exceeds the time budget, say so before doing it.
+- `docs/AI_LOG.md` — append an entry whenever AI output turns out wrong/suboptimal (test failure, reviewer finding, user correction) or an AI suggestion is rejected. Source for AI_WORKFLOW.md.
 
 ## Stack
 
