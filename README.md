@@ -62,7 +62,7 @@ flowchart LR
     Filter["AllExceptionsFilter<br/>one error shape"]
   end
 
-  Repo -->|"pg driver adapter"| PG[(PostgreSQL 16)]
+  Repo -->|"pg driver adapter"| PG[(PostgreSQL 18)]
   Seed["Seed on start<br/>config/exercises.json"] --> PG
 ```
 
@@ -238,7 +238,7 @@ This project was built with Claude Code under explicit rules ([`CLAUDE.md`](CLAU
 
 ## Local development without Docker
 
-Requires Node 24 and a PostgreSQL 16 instance (or `docker compose up -d db`).
+Requires Node 24 and a PostgreSQL 18 instance (or `docker compose up -d db`).
 
 ```bash
 npm ci

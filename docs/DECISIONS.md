@@ -46,9 +46,9 @@ Decisions made with the user during planning. Feeds the README "design decisions
 - Why: Clients can branch on `code` instead of parsing messages, and the README can document a fixed error-code table. 400 is the NestJS default and what clients expect. Full paths tell a coach exactly which set in a bulk request is wrong.
 
 ## 2026-10-08 — Database: PostgreSQL
-- Decision: PostgreSQL 16.
+- Decision: PostgreSQL 18 (latest stable; upgraded from an initial default of 16 before any data existed).
 - Alternatives: MongoDB.
-- Why: The workload is relational and aggregation-heavy. PR queries are top-1 lookups per user + exercise that map directly onto composite B-tree indexes; history filters join a small exercise catalog; bulk logging needs transactions and unique constraints. MongoDB's flexible schema is not needed (fixed data shape), and nested sets would need `$unwind` for PR queries.
+- Why: The workload is relational and aggregation-heavy. PR queries are top-1 lookups per user + exercise that map directly onto composite B-tree indexes; history filters join a small exercise catalog; bulk logging needs transactions and unique constraints. MongoDB's flexible schema is not needed (fixed data shape), and nested sets would need `$unwind` for PR queries. Version 18 over 16: supported until 2030 (vs 2028), native `uuidv7()`, B-tree skip scan and async I/O; there is no existing production cluster to match. 19 is still in beta.
 
 ## 2026-10-08 — Time and timezone
 - Decision: Clients send `date` as an ISO 8601 datetime with offset (e.g. `2026-10-07T07:30:00+07:00`); it is required. Stored as `performed_at` (`timestamptz`, UTC) plus `local_date` (`date`, the client's calendar day) and `utc_offset_minutes`. Calendar questions ("PR this month vs last month") use `local_date`; ordering, pagination and time ranges use `performed_at`.
