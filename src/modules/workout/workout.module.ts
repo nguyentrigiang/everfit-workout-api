@@ -5,6 +5,7 @@ import { WorkoutController } from './controllers/workout.controller.js';
 import { UnitConverter } from './domain/units/unit-converter.js';
 import { DEFAULT_UNIT_REGISTRY } from './domain/units/unit-registry.js';
 import { PersonalRecordRepository } from './repositories/personal-record.repository.js';
+import { PrismaWorkoutRepository } from './repositories/prisma-workout.repository.js';
 import { WorkoutRepository } from './repositories/workout.repository.js';
 import { PersonalRecordService } from './services/personal-record.service.js';
 import { WorkoutService } from './services/workout.service.js';
@@ -18,7 +19,7 @@ import { WorkoutService } from './services/workout.service.js';
   controllers: [WorkoutController, PersonalRecordController],
   providers: [
     WorkoutService,
-    WorkoutRepository,
+    { provide: WorkoutRepository, useClass: PrismaWorkoutRepository },
     PersonalRecordService,
     PersonalRecordRepository,
     // Built from the same registry that request validation uses (single source).

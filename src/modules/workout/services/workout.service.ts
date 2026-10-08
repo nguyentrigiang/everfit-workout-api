@@ -177,14 +177,10 @@ export class WorkoutService {
       list.push({
         setIndex: s.set_index,
         reps: s.reps,
-        weight: toApiNumber(
-          this.units.fromKg(s.weight_kg.toString(), query.unit),
-        ),
+        weight: toApiNumber(this.units.fromKg(s.weight_kg, query.unit)),
         unit: query.unit,
-        volume: toApiNumber(
-          this.units.fromKg(s.volume_kg.toString(), query.unit),
-        ),
-        e1rm: toApiNumber(this.units.fromKg(s.e1rm_kg.toString(), query.unit)),
+        volume: toApiNumber(this.units.fromKg(s.volume_kg, query.unit)),
+        e1rm: toApiNumber(this.units.fromKg(s.e1rm_kg, query.unit)),
       });
       setsByEntry.set(s.entry_id, list);
     }

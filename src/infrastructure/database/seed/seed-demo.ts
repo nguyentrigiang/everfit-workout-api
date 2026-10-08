@@ -2,6 +2,7 @@ import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { normalizeExerciseName } from '../../../modules/exercise/domain/exercise-name.js';
 import { PrismaTransactionRunner } from '../prisma/prisma-transaction-runner.js';
 import { TransactionRunner } from '../../../shared/database/transaction.js';
+import { PrismaWorkoutRepository } from '../../../modules/workout/repositories/prisma-workout.repository.js';
 import { UnitConverter } from '../../../modules/workout/domain/units/unit-converter.js';
 import { DEFAULT_UNIT_REGISTRY } from '../../../modules/workout/domain/units/unit-registry.js';
 import { computeSetMetrics } from '../../../modules/workout/domain/strength-metrics.js';
@@ -58,7 +59,7 @@ export async function seedDemoWorkouts(
   // Standalone script outside Nest DI: build the same instances the app injects
   // (WorkoutModule uses this registry and PrismaModule this transaction runner).
   const units = new UnitConverter(DEFAULT_UNIT_REGISTRY);
-  const workouts = new WorkoutRepository(prisma);
+  const workouts = new PrismaWorkoutRepository(prisma);
   const transactions = new PrismaTransactionRunner(prisma).withTimeout(60_000);
   const result: DemoSeedResult = {
     seededUsers: [],
