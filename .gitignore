@@ -18,3 +18,6 @@ coverage/
 
 # Original assignment text (kept local, not published)
 docs/ASSIGNMENT.md
+
+# Generated Prisma client
+src/generated/

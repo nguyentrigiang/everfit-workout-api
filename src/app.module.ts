@@ -5,6 +5,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 import { validationExceptionFactory } from './common/validation/validation-exception.factory.js';
 import { validate } from './config/env.validation.js';
 import { buildLoggerOptions } from './config/logger.config.js';
@@ -16,6 +17,7 @@ import { buildLoggerOptions } from './config/logger.config.js';
       inject: [ConfigService],
       useFactory: buildLoggerOptions,
     }),
+    PrismaModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,0 +1,96 @@
+// Schema design and index rationale: see docs/DECISIONS.md and README.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Muscle group catalog, seeded from config (not hardcoded in business logic).
+model MuscleGroup {
+  id        Int                   @id @default(autoincrement())
+  slug      String                @unique
+  name      String
+  sortOrder Int                   @default(0) @map("sort_order")
+  exercises ExerciseMuscleGroup[]
+
+  @@map("muscle_groups")
+}
+
+model Exercise {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Display name as first logged / configured.
+  name           String
+  /// Trimmed, lowercased, collapsed spaces. Used for lookups and partial match.
+  nameNormalized String                @unique @map("name_normalized")
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  muscleGroups   ExerciseMuscleGroup[]
+  entries        WorkoutEntry[]
+
+  @@map("exercises")
+}
+
+model ExerciseMuscleGroup {
+  exerciseId    String      @map("exercise_id") @db.Uuid
+  muscleGroupId Int         @map("muscle_group_id")
+  exercise      Exercise    @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  muscleGroup   MuscleGroup @relation(fields: [muscleGroupId], references: [id], onDelete: Cascade)
+
+  @@id([exerciseId, muscleGroupId])
+  @@index([muscleGroupId])
+  @@map("exercise_muscle_groups")
+}
+
+/// One exercise performed by a user at a point in time; holds one or more sets.
+model WorkoutEntry {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String       @map("user_id")
+  exerciseId       String       @map("exercise_id") @db.Uuid
+  /// Moment of the workout, stored in UTC.
+  performedAt      DateTime     @map("performed_at") @db.Timestamptz(3)
+  /// Client's calendar day, used for calendar-based comparisons (month vs month).
+  localDate        DateTime     @map("local_date") @db.Date
+  utcOffsetMinutes Int          @map("utc_offset_minutes")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  exercise         Exercise     @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  sets             WorkoutSet[]
+
+  /// Idempotency / concurrent-write guard (natural key). Also serves history filtered by exercise.
+  @@unique([userId, exerciseId, performedAt], map: "workout_entries_user_exercise_performed_key")
+  /// History listing + keyset cursor on (performed_at, id).
+  @@index([userId, performedAt(sort: Desc), id(sort: Desc)], map: "workout_entries_user_performed_idx")
+  @@map("workout_entries")
+}
+
+/// One set of an entry. Metrics are precomputed in kg and user/exercise/time/local date are copied
+/// from the entry so PR queries are single index lookups without joins.
+model WorkoutSet {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entryId     String       @map("entry_id") @db.Uuid
+  setIndex    Int          @map("set_index")
+  reps        Int
+  /// Original value and unit as logged. Unit is validated by the app's unit registry.
+  weight      Decimal      @db.Decimal(10, 3)
+  unit        String
+  /// Normalized metrics kept at 6 decimals; rounding happens only on output.
+  weightKg    Decimal      @map("weight_kg") @db.Decimal(14, 6)
+  volumeKg    Decimal      @map("volume_kg") @db.Decimal(16, 6)
+  e1rmKg      Decimal      @map("e1rm_kg") @db.Decimal(14, 6)
+  userId      String       @map("user_id")
+  exerciseId  String       @map("exercise_id") @db.Uuid
+  performedAt DateTime     @map("performed_at") @db.Timestamptz(3)
+  localDate   DateTime     @map("local_date") @db.Date
+  entry       WorkoutEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@unique([entryId, setIndex])
+  @@index([userId, exerciseId, weightKg(sort: Desc)], map: "workout_sets_pr_weight_idx")
+  @@index([userId, exerciseId, volumeKg(sort: Desc)], map: "workout_sets_pr_volume_idx")
+  @@index([userId, exerciseId, e1rmKg(sort: Desc)], map: "workout_sets_pr_e1rm_idx")
+  /// PR comparisons over calendar ranges (this month vs last month) use the client's local date.
+  @@index([userId, exerciseId, localDate], map: "workout_sets_user_exercise_local_date_idx")
+  @@map("workout_sets")
+}
