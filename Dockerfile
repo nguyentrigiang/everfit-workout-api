@@ -6,7 +6,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# Runtime stage: production deps, compiled output, and what `prisma migrate deploy` needs
+# Runtime stage: production deps, compiled output, migration files and the seed config
 FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
@@ -15,6 +15,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY prisma ./prisma
 COPY prisma.config.ts ./
+COPY config ./config
 COPY docker/entrypoint.sh ./docker/entrypoint.sh
 USER node
 EXPOSE 3000

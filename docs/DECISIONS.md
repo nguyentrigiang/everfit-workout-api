@@ -60,7 +60,7 @@ Decisions made with the user during planning. Feeds the README "design decisions
 - Why: With 50k+ entries (~150–250k sets) per user, PRs must not scan all sets. Precomputed, indexed columns keep PR reads O(log n). Trade-offs: denormalized columns and slightly slower writes; acceptable because entries are immutable once logged. A maintained PR table was rejected: it adds write-time races and cannot answer arbitrary time-range comparisons. A composite foreign key forcing the copied columns to match the parent entry was also rejected (extra multi-column unique index and 5-column FK for little gain); instead sets take the copied values from the entry row returned by the insert, in a single code path covered by tests.
 
 ## 2026-10-08 — Unknown exercise names
-- Decision: Logging an exercise that is not in the catalog creates it automatically with no muscle groups. Names are matched on a normalized form (trimmed, lowercased, collapsed spaces), unique in the DB.
+- Decision: Logging an exercise that is not in the catalog creates it automatically with no muscle groups. Names are matched on a normalized form (Unicode NFKC, trimmed, lowercased, collapsed spaces), unique in the DB.
 - Alternatives: reject with 400.
 - Why: Coaches are never blocked; the assignment says muscle group filtering applies "if exercise metadata is available". New exercises get muscle groups once added to the config.
 
@@ -73,3 +73,8 @@ Decisions made with the user during planning. Feeds the README "design decisions
 - Decision: Separate tables `muscle_groups (id, slug, name)` and `exercise_muscle_groups (exercise_id, muscle_group_id)`, seeded from a config file (not hardcoded in code).
 - Alternatives: `text[]` column on exercises; JSONB metadata.
 - Why: A future screen can list muscle groups with display names and let users pick one; foreign keys prevent typos. Performance is the same as an array because the catalog is small; the heavy part of filtered history is the `workout_entries` index.
+
+## 2026-10-08 — Seeding the exercise catalog
+- Decision: The seed only initializes data. Muscle groups (by slug), exercises (by normalized name) and exercise–muscle-group pairs are inserted if missing (`ON CONFLICT DO NOTHING`); existing rows are never updated or deleted, so later config edits do not rewrite stored data. The config is validated before anything is written (unknown slugs, duplicate normalized names, exercises without muscle groups) and all inserts run in one transaction.
+- Alternatives: config as source of truth that replaces mappings on every run; upserting display names.
+- Why: Seeding is for initial content; once data is in the DB it belongs to the running system. Insert-only is idempotent and safe to run on every container start. Trade-off: correcting a mapping already in the DB needs a migration or a manual change, not a config edit.
