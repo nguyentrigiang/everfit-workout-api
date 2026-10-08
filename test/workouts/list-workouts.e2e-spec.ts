@@ -170,9 +170,10 @@ describe('GET /api/v1/users/:userId/workouts (e2e)', () => {
     const pageSizes: number[] = [];
     let cursor: string | null = null;
     do {
-      const res = await list({ limit: 10, ...(cursor && { cursor }) }).expect(
-        200,
-      );
+      const query: Record<string, string | number> = cursor
+        ? { limit: 10, cursor }
+        : { limit: 10 };
+      const res: request.Response = await list(query).expect(200);
       seen.push(...res.body.data.map((e: { id: string }) => e.id));
       pageSizes.push(res.body.data.length);
       cursor = res.body.pagination.nextCursor;
