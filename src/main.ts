@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module.js';
+import { configureApp } from './app.setup.js';
 import type { EnvironmentVariables } from './config/env.validation.js';
 
 async function bootstrap() {
@@ -9,6 +10,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
   app.enableShutdownHooks();
+  configureApp(app);
 
   const config =
     app.get<ConfigService<EnvironmentVariables, true>>(ConfigService);
