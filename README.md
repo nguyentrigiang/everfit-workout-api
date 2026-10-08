@@ -47,6 +47,14 @@ curl 'localhost:3000/api/v1/users/coach-1/records?exercise=deadlift&from=2026-10
 
 Sending the same POST again returns `200` with every entry marked `duplicate`. Nothing is stored twice.
 
+Optional sample data (about 7 seconds; safe to re-run, and a run interrupted midway is completed by running it again):
+
+```bash
+docker compose exec app npm run db:seed:demo
+```
+
+This adds `perf-user` with 50,000 entries and `demo-user-01` … `demo-user-20` with 500 entries each, so `/users/demo-user-01/workouts` and `/users/perf-user/records?exercise=squat` return data right away.
+
 ## Architecture
 
 ```mermaid
@@ -190,14 +198,15 @@ npm run test:e2e            # migrates, wipes and seeds everfit_test, then runs 
 npm run docs:check          # validates the OpenAPI document of a running built app
 ```
 
-- **Unit (81):** unit conversion (incl. adding `stone`), Epley and volume (incl. rounding pitfalls), decimal rounding, date and offset parsing, cursor encoding, env validation, log serializers, exception filter, validation error paths, catalog config validation.
-- **E2E (79):** every endpoint through the real HTTP pipeline and Postgres:
+- **Unit (95):** unit conversion (incl. adding `stone`), Epley and volume (incl. rounding pitfalls), decimal rounding, date and offset parsing, cursor encoding, env validation, log serializers, exception filter, validation error paths, catalog config validation, bulk-logging status counting, demo data generator (determinism, validation limits, local dates).
+- **E2E (84):** every endpoint through the real HTTP pipeline and Postgres:
   - logging in mixed units, auto-created exercises
   - idempotent retries, concurrent identical and reversed-order requests
   - every validation edge case (invalid unit, null date, missing offset, future date, negative weight, zero reps, empty sets, limits, unknown fields)
   - history filters, unit conversion, pagination without gaps or duplicates, empty ranges
   - PR values, ties and comparisons
-  - DB constraints (unique, cascade, CHECK)
+  - DB constraints (unique, cascade, CHECK) and UUIDv7 keys
+  - demo seeding (batches, copied set columns, re-run and resume after a partial run)
   - the largest valid bulk request
 
 Tests are named by behavior and assert exact values computed by hand, never re-computed with the implementation's formula.
@@ -212,7 +221,9 @@ Tests are named by behavior and assert exact values computed by hand, never re-c
 
 ## Performance
 
-> **Pending:** a script seeds 50,000+ entries for one user, and `EXPLAIN ANALYZE` is run on the history (unfiltered, by exercise, by muscle group, by date range, deep cursor) and PR (all-time, range, comparison) queries. The results table will be added here.
+**Dataset:** `npm run db:seed:demo` generates deterministic history (fixed-seed PRNG, fixed end date `2026-09-30`; the same catalog config gives the same data): `perf-user` has 50,000 entries and about 175,000 sets over five years, next to 20 users with 500 entries each, so every query must stay scoped by `user_id`. Weights progress over time, about 20% of sessions are logged in lb, and users have different UTC offsets. The density (several sessions a day) is higher than real life on purpose: query cost depends on rows per user, not on how they are spread. Rows are written with the API's own repository SQL and metric code (`computeSetMetrics`), so stored kg, volume and 1RM values match what the API writes ([details](docs/DECISIONS.md#2026-10-08--demo-and-performance-seed-data)).
+
+> **Pending:** `EXPLAIN ANALYZE` is run on the history (unfiltered, by exercise, by muscle group, by date range, deep cursor) and PR (all-time, range, comparison) queries. The results table will be added here.
 
 ## Trade-offs
 

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { normalizeExerciseName } from '../../exercises/exercise-name.js';
 
 export interface MuscleGroupConfig {
@@ -113,4 +114,17 @@ export function validateCatalogConfig(raw: unknown): CatalogConfig {
     throw new Error(`Invalid catalog config: ${errors.join('; ')}`);
   }
   return raw as unknown as CatalogConfig;
+}
+
+/** Reads and validates the catalog config file (default `config/exercises.json`). */
+export async function loadCatalogConfig(path: string): Promise<CatalogConfig> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await readFile(path, 'utf8'));
+  } catch (error) {
+    throw new Error(
+      `Cannot read catalog config ${path}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return validateCatalogConfig(raw);
 }
