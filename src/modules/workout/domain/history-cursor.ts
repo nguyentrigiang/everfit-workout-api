@@ -1,6 +1,6 @@
 import { HttpStatus } from '@nestjs/common';
-import { AppException } from '../errors/app.exception.js';
-import { ErrorCode } from '../errors/error-code.js';
+import { AppException } from '../../../shared/errors/app.exception.js';
+import { ErrorCode } from '../../../shared/errors/error-code.js';
 
 /** Position after the last row of a page, ordered by (performed_at DESC, id DESC). */
 export interface HistoryCursor {

@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { normalizeExerciseName } from '../../modules/exercise/domain/exercise-name.js';
+import { normalizeExerciseName } from '../../../modules/exercise/domain/exercise-name.js';
 
 export interface MuscleGroupConfig {
   slug: string;

@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../src/generated/prisma/client.js';
-import type { CatalogConfig } from '../../src/database/seed/catalog-config.js';
-import { seedCatalog } from '../../src/database/seed/seed-catalog.js';
+import type { CatalogConfig } from '../../src/infrastructure/database/seed/catalog-config.js';
+import { seedCatalog } from '../../src/infrastructure/database/seed/seed-catalog.js';
 
 describe('seedCatalog (e2e)', () => {
   let prisma: PrismaClient;

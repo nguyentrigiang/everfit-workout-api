@@ -2,12 +2,12 @@ import { Module, ValidationPipe } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
-import { PrismaModule } from './prisma/prisma.module.js';
+import { AllExceptionsFilter } from './infrastructure/http/all-exceptions.filter.js';
+import { PrismaModule } from './infrastructure/database/prisma/prisma.module.js';
 import { WorkoutModule } from './modules/workout/workout.module.js';
-import { validationExceptionFactory } from './common/validation/validation-exception.factory.js';
-import { validate } from './config/env.validation.js';
-import { buildLoggerOptions } from './config/logger.config.js';
+import { validationExceptionFactory } from './infrastructure/http/validation-exception.factory.js';
+import { validate } from './infrastructure/config/env.validation.js';
+import { buildLoggerOptions } from './infrastructure/logging/logger.config.js';
 
 @Module({
   imports: [

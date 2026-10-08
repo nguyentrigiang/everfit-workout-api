@@ -37,7 +37,8 @@ bulk-log workouts, query history, compute personal records (PRs).
 
 ## Architecture
 
-- Module per domain: `workouts`, `records` (PRs), `exercises`, `units`, plus `common` (filters, pipes, utils).
+- Business modules in `src/modules/`: `workout` (logging, history, personal records, unit conversion) and `exercise` (catalog, muscle groups). Inside each: `controllers/`, `services/`, `repositories/`, `dto/`, `domain/`. See `docs/ARCHITECTURE_BRIEF.md`.
+- `src/shared/`: errors and Swagger response decorators only. `src/infrastructure/`: HTTP pipeline, config, logging, Prisma, seed and perf scripts. Modules never import `infrastructure/http`.
 - Controllers: HTTP only (DTOs, params, response mapping). No business logic.
 - Services: business logic. Repositories / Prisma access isolated from controllers.
 - Everything injected via Nest DI. No `new SomeService()` in business code.
@@ -64,7 +65,7 @@ bulk-log workouts, query history, compute personal records (PRs).
   ```json
   { "statusCode": 400, "code": "VALIDATION_ERROR", "error": "Bad Request", "message": "Validation failed", "details": [{ "field": "entries[0].sets[2].weight", "message": "..." }], "path": "/api/v1/...", "timestamp": "...", "requestId": "..." }
   ```
-- Throw domain errors as `AppException(status, ErrorCode.X, message, details?)` (`src/common/errors`); add new codes to `ErrorCode`. Never return error bodies manually from controllers.
+- Throw domain errors as `AppException(status, ErrorCode.X, message, details?)` (`src/shared/errors`); add new codes to `ErrorCode`. Never return error bodies manually from controllers.
 - Empty results are NOT errors: return `200` with `data: []` and a `message`.
 - List responses: `{ data, pagination: { nextCursor, hasMore, limit } }`.
 

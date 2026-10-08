@@ -1,5 +1,5 @@
-import { AppException } from '../errors/app.exception.js';
-import { decodeCursor, encodeCursor } from './cursor.js';
+import { AppException } from '../../../shared/errors/app.exception.js';
+import { decodeCursor, encodeCursor } from './history-cursor.js';
 
 describe('history cursor', () => {
   const cursor = {

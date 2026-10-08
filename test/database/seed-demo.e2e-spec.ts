@@ -4,7 +4,7 @@ import { PrismaClient } from '../../src/generated/prisma/client.js';
 import {
   type DemoSeedOptions,
   seedDemoWorkouts,
-} from '../../src/database/seed/seed-demo.js';
+} from '../../src/infrastructure/database/seed/seed-demo.js';
 
 // Uses the catalog seeded by the e2e global setup.
 describe('seedDemoWorkouts (e2e)', () => {

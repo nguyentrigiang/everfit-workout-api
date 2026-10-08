@@ -1,12 +1,12 @@
-import type { PrismaClient } from '../../generated/prisma/client.js';
-import { normalizeExerciseName } from '../../modules/exercise/domain/exercise-name.js';
-import { UnitConverter } from '../../modules/workout/domain/units/unit-converter.js';
-import { DEFAULT_UNIT_REGISTRY } from '../../modules/workout/domain/units/unit-registry.js';
-import { computeSetMetrics } from '../../modules/workout/domain/strength-metrics.js';
+import type { PrismaClient } from '../../../generated/prisma/client.js';
+import { normalizeExerciseName } from '../../../modules/exercise/domain/exercise-name.js';
+import { UnitConverter } from '../../../modules/workout/domain/units/unit-converter.js';
+import { DEFAULT_UNIT_REGISTRY } from '../../../modules/workout/domain/units/unit-registry.js';
+import { computeSetMetrics } from '../../../modules/workout/domain/strength-metrics.js';
 import {
   type NewSetRow,
   WorkoutRepository,
-} from '../../modules/workout/repositories/workout.repository.js';
+} from '../../../modules/workout/repositories/workout.repository.js';
 import {
   createRng,
   type DemoEntry,

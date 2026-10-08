@@ -3,13 +3,13 @@ import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import {
   ApiErrorResponse,
   ApiExampleResponse,
-} from '../../../docs/api-responses.js';
+} from '../../../shared/swagger/api-responses.js';
 import {
   RECORDS_EMPTY_EXAMPLE,
   RECORDS_EXAMPLE,
   RECORDS_NOT_FOUND_EXAMPLE,
   RECORDS_VALIDATION_ERROR_EXAMPLE,
-} from '../dto/responses/examples.js';
+} from './api-examples.js';
 import { UserParamsDto } from '../dto/requests/log-workouts.dto.js';
 import { PersonalRecordsQuery } from '../dto/requests/personal-records.query.js';
 import type { RecordsResult } from '../dto/responses/personal-record.responses.js';
@@ -28,6 +28,7 @@ export class PersonalRecordController {
   /** Personal records for one exercise, optionally compared with a second date range. */
   @Get()
   @ApiOperation({
+    operationId: 'getPersonalRecords',
     summary: 'Personal records for an exercise',
     description:
       'Heaviest set, highest set volume (reps × weight) and best estimated 1RM (Epley), each with the set and date. ' +
