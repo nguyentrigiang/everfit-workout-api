@@ -22,7 +22,7 @@ model MuscleGroup {
 }
 
 model Exercise {
-  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id             String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
   /// Display name as first logged / configured.
   name           String
   /// Trimmed, lowercased, collapsed spaces. Used for lookups and partial match.
@@ -47,7 +47,7 @@ model ExerciseMuscleGroup {
 
 /// One exercise performed by a user at a point in time; holds one or more sets.
 model WorkoutEntry {
-  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id               String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
   userId           String       @map("user_id")
   exerciseId       String       @map("exercise_id") @db.Uuid
   /// Moment of the workout, stored in UTC.
@@ -69,7 +69,7 @@ model WorkoutEntry {
 /// One set of an entry. Metrics are precomputed in kg and user/exercise/time/local date are copied
 /// from the entry so PR queries are single index lookups without joins.
 model WorkoutSet {
-  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id          String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
   entryId     String       @map("entry_id") @db.Uuid
   setIndex    Int          @map("set_index")
   reps        Int
