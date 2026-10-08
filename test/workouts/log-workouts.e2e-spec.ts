@@ -215,6 +215,23 @@ describe('POST /api/v1/users/:userId/workouts (e2e)', () => {
     });
   });
 
+  it('accepts the largest valid request (100 entries × 50 sets)', async () => {
+    const entries = Array.from({ length: 100 }, (_, i) => ({
+      date: new Date(Date.UTC(2026, 8, 1, 0, i)).toISOString(),
+      exerciseName: 'Bench Press',
+      sets: Array.from({ length: 50 }, () => ({
+        reps: 1000,
+        weight: 1999.125,
+        unit: 'kg',
+      })),
+    }));
+
+    const res = await post({ entries }).expect(201);
+
+    expect(res.body.data.summary.created).toBe(100);
+    expect(await prisma.workoutSet.count({ where: { userId } })).toBe(5000);
+  });
+
   describe('validation (E1, E2)', () => {
     const expectValidationError = async (body: unknown, field: string) => {
       const res = await post(body).expect(400);
