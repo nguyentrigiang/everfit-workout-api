@@ -10,7 +10,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import { IsCalendarDate } from '../../domain/time/calendar-date.js';
+import { IsCalendarDate } from '../validators/date.validators.js';
 import {
   SUPPORTED_UNITS,
   type WeightUnit,

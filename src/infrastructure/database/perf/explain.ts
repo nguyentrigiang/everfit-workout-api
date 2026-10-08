@@ -2,7 +2,8 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '../../../generated/prisma/client.js';
-import { encodeCursor } from '../../../modules/workout/domain/history-cursor.js';
+import type { Transaction } from '../../../shared/database/transaction.js';
+import { encodeCursor } from '../../../modules/workout/services/history-cursor.js';
 import { ExerciseRepository } from '../../../modules/exercise/repositories/exercise.repository.js';
 import { PersonalRecordRepository } from '../../../modules/workout/repositories/personal-record.repository.js';
 import { WorkoutRepository } from '../../../modules/workout/repositories/workout.repository.js';
@@ -18,8 +19,8 @@ const HTTP_RUNS = 50;
 interface Scenario {
   id: string;
   title: string;
-  /** Runs the repository call(s) with the given transaction stand-in. */
-  run: (tx: Prisma.TransactionClient) => Promise<unknown>;
+  /** Runs the repository call(s), on the given transaction stand-in if any. */
+  run: (tx?: Transaction) => Promise<unknown>;
   /** Matching API path (relative to /api/v1/users/perf-user), if any. */
   http?: string;
 }
@@ -60,7 +61,7 @@ async function main(): Promise<void> {
     const measured: Measured[] = [];
     for (const scenario of scenarios) {
       // Warm the cache with the real query, then capture its plan.
-      await scenario.run(prisma);
+      await scenario.run();
       const plans = await explain(prisma, scenario);
       const http = !scenario.http
         ? undefined
@@ -96,8 +97,10 @@ async function explain(
       plans.push(rows.map((r) => r['QUERY PLAN']));
       return [];
     },
-  } as unknown as Prisma.TransactionClient;
-  await scenario.run(tx);
+  };
+  // Repositories run every query on the transaction they are given, so they talk
+  // to the stand-in without knowing it.
+  await scenario.run(tx as unknown as Transaction);
   return plans;
 }
 
@@ -115,10 +118,10 @@ function combine(plans: string[][]): PlanSummary {
 }
 
 async function buildScenarios(prisma: PrismaClient): Promise<Scenario[]> {
-  // Standalone script outside Nest DI; the repositories have no dependencies.
-  const workouts = new WorkoutRepository();
-  const records = new PersonalRecordRepository();
-  const exercises = new ExerciseRepository();
+  // Standalone script outside Nest DI: the repositories only need the client.
+  const workouts = new WorkoutRepository(prisma);
+  const records = new PersonalRecordRepository(prisma);
+  const exercises = new ExerciseRepository(prisma);
 
   const [deadlift] = await prisma.$queryRaw<{ id: string }[]>`
     SELECT id FROM exercises WHERE name_normalized = 'deadlift'`;
@@ -138,28 +141,26 @@ async function buildScenarios(prisma: PrismaClient): Promise<Scenario[]> {
   const deepCursor = { performedAt: deep.performed_at, id: deep.id };
   const midCursor = { performedAt: mid.performed_at, id: mid.id };
   const history = (
-    tx: Prisma.TransactionClient,
+    tx: Transaction | undefined,
     extra: Partial<Parameters<WorkoutRepository['findHistoryPage']>[0]>,
-  ) => workouts.findHistoryPage({ tx, userId: USER, limit: 20, ...extra });
+  ) => workouts.findHistoryPage({ userId: USER, limit: 20, ...extra }, tx);
   // Same sequence as WorkoutService.listHistory: resolve ids on the catalog, return
   // early when nothing matches, otherwise read history for those ids. Both are measured.
   const filtered = async (
-    tx: Prisma.TransactionClient,
+    tx: Transaction | undefined,
     filter: { nameContains?: string; muscleGroup?: string },
     extra: Partial<Parameters<WorkoutRepository['findHistoryPage']>[0]> = {},
   ) => {
-    await exercises.findIdsForFilter(tx, filter);
+    await exercises.findIdsForFilter(filter, tx);
     // The stand-in returns no rows, so take the real ids from the database.
-    const exerciseIds = await exercises.findIdsForFilter(prisma, filter);
+    const exerciseIds = await exercises.findIdsForFilter(filter);
     if (exerciseIds.length > 0) await history(tx, { ...extra, exerciseIds });
   };
-  const prs = (tx: Prisma.TransactionClient, from?: string, to?: string) =>
-    records.findRecords(tx, {
-      userId: USER,
-      exerciseId: deadlift.id,
-      from,
-      to,
-    });
+  const prs = (tx: Transaction | undefined, from?: string, to?: string) =>
+    records.findRecords(
+      { userId: USER, exerciseId: deadlift.id, from, to },
+      tx,
+    );
 
   return [
     {
@@ -212,7 +213,7 @@ async function buildScenarios(prisma: PrismaClient): Promise<Scenario[]> {
     {
       id: 'H8',
       title: 'Sets for a page of 100 entries',
-      run: (tx) => workouts.findSetsForEntries(tx, page.ids),
+      run: (tx) => workouts.findSetsForEntries(page.ids, tx),
     },
     // Worst cases: a filter that matches nothing walks every entry of the user.
     {

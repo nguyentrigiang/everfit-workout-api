@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { PrismaRepository } from '../../../infrastructure/database/prisma/prisma-repository.js';
+import type { Transaction } from '../../../shared/database/transaction.js';
 import { Prisma } from '../../../generated/prisma/client.js';
 import {
   cleanDisplayName,
@@ -11,14 +13,14 @@ export interface ResolvedExercise {
 }
 
 @Injectable()
-export class ExerciseRepository {
+export class ExerciseRepository extends PrismaRepository {
   /**
    * Returns the exercise for each name, creating missing ones (no muscle groups yet).
    * Keyed by normalized name. Insert-if-missing is race-safe via the unique index.
    */
   async resolveByNames(
-    tx: Prisma.TransactionClient,
     names: string[],
+    tx: Transaction,
   ): Promise<Map<string, ResolvedExercise>> {
     const byKey = new Map<string, string>();
     for (const name of names) {
@@ -31,14 +33,14 @@ export class ExerciseRepository {
     const keys = sorted.map(([key]) => key);
     const displayNames = sorted.map(([, name]) => name);
 
-    await tx.$executeRaw`
+    await this.db(tx).$executeRaw`
       INSERT INTO exercises (name, name_normalized)
       SELECT u.name, u.name_normalized
       FROM unnest(${displayNames}::text[], ${keys}::text[]) AS u(name, name_normalized)
       ORDER BY u.name_normalized
       ON CONFLICT (name_normalized) DO NOTHING`;
 
-    const rows = await tx.$queryRaw<
+    const rows = await this.db(tx).$queryRaw<
       { id: string; name: string; name_normalized: string }[]
     >`
       SELECT id, name, name_normalized FROM exercises
@@ -50,8 +52,8 @@ export class ExerciseRepository {
   }
 
   /** All muscle group slugs in display order (used to validate filters). */
-  async listMuscleGroupSlugs(tx: Prisma.TransactionClient): Promise<string[]> {
-    const rows = await tx.muscleGroup.findMany({
+  async listMuscleGroupSlugs(tx?: Transaction): Promise<string[]> {
+    const rows = await this.db(tx).muscleGroup.findMany({
       select: { slug: true },
       orderBy: { sortOrder: 'asc' },
     });
@@ -64,8 +66,8 @@ export class ExerciseRepository {
    * entirely when nothing matches.
    */
   async findIdsForFilter(
-    tx: Prisma.TransactionClient,
     filter: { nameContains?: string; muscleGroup?: string },
+    tx?: Transaction,
   ): Promise<string[]> {
     const conditions: Prisma.Sql[] = [];
     if (filter.nameContains !== undefined) {
@@ -83,17 +85,17 @@ export class ExerciseRepository {
     if (conditions.length === 0) {
       throw new Error('findIdsForFilter needs at least one filter');
     }
-    const rows = await tx.$queryRaw<{ id: string }[]>`
+    const rows = await this.db(tx).$queryRaw<{ id: string }[]>`
       SELECT ex.id FROM exercises ex WHERE ${Prisma.join(conditions, ' AND ')}`;
     return rows.map((r) => r.id);
   }
 
   /** Exact lookup by normalized name (case and whitespace insensitive). */
   async findByName(
-    tx: Prisma.TransactionClient,
     name: string,
+    tx?: Transaction,
   ): Promise<ResolvedExercise | null> {
-    return tx.exercise.findUnique({
+    return this.db(tx).exercise.findUnique({
       where: { nameNormalized: normalizeExerciseName(name) },
       select: { id: true, name: true },
     });

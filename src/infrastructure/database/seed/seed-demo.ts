@@ -1,5 +1,7 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { normalizeExerciseName } from '../../../modules/exercise/domain/exercise-name.js';
+import { PrismaTransactionRunner } from '../prisma/prisma-transaction-runner.js';
+import { TransactionRunner } from '../../../shared/database/transaction.js';
 import { UnitConverter } from '../../../modules/workout/domain/units/unit-converter.js';
 import { DEFAULT_UNIT_REGISTRY } from '../../../modules/workout/domain/units/unit-registry.js';
 import { computeSetMetrics } from '../../../modules/workout/domain/strength-metrics.js';
@@ -54,9 +56,10 @@ export async function seedDemoWorkouts(
   const { batchSize = 2000, log = () => {} } = options;
   const exerciseIds = await resolveExerciseIds(prisma, options.exerciseNames);
   // Standalone script outside Nest DI: build the same instances the app injects
-  // (WorkoutModule uses this registry; the repository has no dependencies).
+  // (WorkoutModule uses this registry and PrismaModule this transaction runner).
   const units = new UnitConverter(DEFAULT_UNIT_REGISTRY);
-  const workouts = new WorkoutRepository();
+  const workouts = new WorkoutRepository(prisma);
+  const transactions = new PrismaTransactionRunner(prisma).withTimeout(60_000);
   const result: DemoSeedResult = {
     seededUsers: [],
     skippedUsers: [],
@@ -82,7 +85,7 @@ export async function seedDemoWorkouts(
     let sets = 0;
     for (let i = 0; i < entries.length; i += batchSize) {
       const batch = await insertBatch(
-        prisma,
+        transactions,
         workouts,
         units,
         user.userId,
@@ -104,7 +107,7 @@ export async function seedDemoWorkouts(
 }
 
 async function insertBatch(
-  prisma: PrismaClient,
+  transactions: TransactionRunner,
   workouts: WorkoutRepository,
   units: UnitConverter,
   userId: string,
@@ -113,37 +116,34 @@ async function insertBatch(
   const key = (exerciseId: string, performedAt: Date) =>
     `${exerciseId}|${performedAt.getTime()}`;
 
-  return prisma.$transaction(
-    async (tx) => {
-      const created = await workouts.insertEntries(tx, userId, batch);
-      const idByKey = new Map(
-        created.map((r) => [key(r.exerciseId, r.performedAt), r.id]),
-      );
-      const sets: NewSetRow[] = batch.flatMap((entry) => {
-        const entryId = idByKey.get(key(entry.exerciseId, entry.performedAt));
-        if (!entryId) return [];
-        return entry.sets.map((set, setIndex) => {
-          const metrics = computeSetMetrics(
-            units.toKg(set.weight, set.unit),
-            set.reps,
-          );
-          return {
-            entryId,
-            setIndex,
-            reps: set.reps,
-            weight: String(set.weight),
-            unit: set.unit,
-            weightKg: metrics.weightKg.toFixed(),
-            volumeKg: metrics.volumeKg.toFixed(),
-            e1rmKg: metrics.e1rmKg.toFixed(),
-          };
-        });
+  return transactions.run(async (tx) => {
+    const created = await workouts.insertEntries(userId, batch, tx);
+    const idByKey = new Map(
+      created.map((r) => [key(r.exerciseId, r.performedAt), r.id]),
+    );
+    const sets: NewSetRow[] = batch.flatMap((entry) => {
+      const entryId = idByKey.get(key(entry.exerciseId, entry.performedAt));
+      if (!entryId) return [];
+      return entry.sets.map((set, setIndex) => {
+        const metrics = computeSetMetrics(
+          units.toKg(set.weight, set.unit),
+          set.reps,
+        );
+        return {
+          entryId,
+          setIndex,
+          reps: set.reps,
+          weight: String(set.weight),
+          unit: set.unit,
+          weightKg: metrics.weightKg.toFixed(),
+          volumeKg: metrics.volumeKg.toFixed(),
+          e1rmKg: metrics.e1rmKg.toFixed(),
+        };
       });
-      await workouts.insertSets(tx, sets);
-      return { entries: created.length, sets: sets.length };
-    },
-    { timeout: 60_000 },
-  );
+    });
+    await workouts.insertSets(sets, tx);
+    return { entries: created.length, sets: sets.length };
+  });
 }
 
 async function resolveExerciseIds(

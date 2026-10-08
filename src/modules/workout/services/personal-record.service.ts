@@ -7,7 +7,6 @@ import {
 } from '../../../shared/errors/app.exception.js';
 import { ErrorCode } from '../../../shared/errors/error-code.js';
 import { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
-import { PrismaService } from '../../../infrastructure/database/prisma/prisma.service.js';
 import { UnitConverter } from '../domain/units/unit-converter.js';
 import type { PersonalRecordsQuery } from '../dto/requests/personal-records.query.js';
 import {
@@ -31,7 +30,6 @@ const KEY_BY_METRIC: Record<RecordMetric, keyof RecordSet> = {
 @Injectable()
 export class PersonalRecordService {
   constructor(
-    private readonly prisma: PrismaService,
     private readonly exercises: ExerciseRepository,
     private readonly records: PersonalRecordRepository,
     private readonly units: UnitConverter,
@@ -43,10 +41,7 @@ export class PersonalRecordService {
   ): Promise<RecordsResult> {
     this.validateRanges(query);
 
-    const exercise = await this.exercises.findByName(
-      this.prisma,
-      query.exercise,
-    );
+    const exercise = await this.exercises.findByName(query.exercise);
     if (!exercise) {
       throw new AppException(
         HttpStatus.NOT_FOUND,
@@ -57,14 +52,14 @@ export class PersonalRecordService {
 
     const compare = query.compareFrom !== undefined;
     const [mainRows, compareRows] = await Promise.all([
-      this.records.findRecords(this.prisma, {
+      this.records.findRecords({
         userId,
         exerciseId: exercise.id,
         from: query.from,
         to: query.to,
       }),
       compare
-        ? this.records.findRecords(this.prisma, {
+        ? this.records.findRecords({
             userId,
             exerciseId: exercise.id,
             from: query.compareFrom,

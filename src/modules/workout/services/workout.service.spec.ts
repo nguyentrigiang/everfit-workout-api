@@ -1,5 +1,5 @@
 import type { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
-import type { PrismaService } from '../../../infrastructure/database/prisma/prisma.service.js';
+import type { TransactionRunner } from '../../../shared/database/transaction.js';
 import { UnitConverter } from '../domain/units/unit-converter.js';
 import { DEFAULT_UNIT_REGISTRY } from '../domain/units/unit-registry.js';
 import type { LogWorkoutsDto } from '../dto/requests/log-workouts.dto.js';
@@ -59,21 +59,23 @@ function setup(inserted: StoredEntryRow[], existing: StoredEntryRow[]) {
     findIdsForFilter: vi.fn().mockResolvedValue([]),
     listMuscleGroupSlugs: vi.fn().mockResolvedValue(['chest', 'core']),
   };
-  const prisma = {
-    $transaction: vi.fn((fn: (tx: unknown) => unknown) => fn({})),
+  // Runs the work immediately with a dummy handle, like a transaction that commits.
+  const tx = { tx: true };
+  const transactions = {
+    run: vi.fn((work: (handle: unknown) => unknown) => work(tx)),
   };
   const service = new WorkoutService(
-    prisma as unknown as PrismaService,
+    transactions as unknown as TransactionRunner,
     exercises as unknown as ExerciseRepository,
     workouts as unknown as WorkoutRepository,
     new UnitConverter(DEFAULT_UNIT_REGISTRY),
   );
-  return { service, workouts, exercises };
+  return { service, workouts, exercises, transactions, tx };
 }
 
 describe('WorkoutService.logWorkouts', () => {
   it('counts created and duplicate entries from their status', async () => {
-    const { service, workouts } = setup(
+    const { service, workouts, tx } = setup(
       [row(SQUAT.id, '2026-10-01T01:00:00Z')],
       [row(BENCH.id, '2026-10-01T01:30:00Z', { setCount: 3 })],
     );
@@ -86,9 +88,36 @@ describe('WorkoutService.logWorkouts', () => {
       [1, 'duplicate', 3],
     ]);
     // Sets are written only for the created entry.
-    expect(workouts.insertSets).toHaveBeenCalledWith({}, [
-      expect.objectContaining({ entryId: `entry-${SQUAT.id}` }),
-    ]);
+    expect(workouts.insertSets).toHaveBeenCalledWith(
+      [expect.objectContaining({ entryId: `entry-${SQUAT.id}` })],
+      tx,
+    );
+  });
+
+  it('runs every write of one request in the same transaction', async () => {
+    const { service, workouts, exercises, transactions, tx } = setup(
+      [row(SQUAT.id, '2026-10-01T01:00:00Z')],
+      [row(BENCH.id, '2026-10-01T01:30:00Z', { setCount: 3 })],
+    );
+
+    await service.logWorkouts('user-1', dto);
+
+    expect(transactions.run).toHaveBeenCalledTimes(1);
+    expect(exercises.resolveByNames).toHaveBeenCalledWith(
+      expect.any(Array),
+      tx,
+    );
+    expect(workouts.insertEntries).toHaveBeenCalledWith(
+      'user-1',
+      expect.any(Array),
+      tx,
+    );
+    expect(workouts.findByNaturalKeys).toHaveBeenCalledWith(
+      'user-1',
+      expect.any(Array),
+      tx,
+    );
+    expect(workouts.insertSets).toHaveBeenCalledWith(expect.any(Array), tx);
   });
 
   it('fails without a summary or sets when an entry is neither inserted nor found', async () => {
@@ -116,7 +145,7 @@ describe('WorkoutService.listHistory', () => {
       query({ exercise: 'zzzz', muscleGroup: 'core' }),
     );
 
-    expect(exercises.findIdsForFilter).toHaveBeenCalledWith(expect.anything(), {
+    expect(exercises.findIdsForFilter).toHaveBeenCalledWith({
       nameContains: 'zzzz',
       muscleGroup: 'core',
     });

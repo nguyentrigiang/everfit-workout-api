@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { PrismaRepository } from '../../../infrastructure/database/prisma/prisma-repository.js';
+import type { Transaction } from '../../../shared/database/transaction.js';
 import { Prisma } from '../../../generated/prisma/client.js';
 
 export type RecordMetric = 'weight' | 'volume' | 'e1rm';
@@ -23,7 +25,7 @@ export interface RecordsParams {
 }
 
 @Injectable()
-export class PersonalRecordRepository {
+export class PersonalRecordRepository extends PrismaRepository {
   /**
    * The best set per metric in one statement: three top-1 lookups joined with UNION ALL.
    * Without a range each uses the (user_id, exercise_id, <metric> DESC) index; with a
@@ -31,8 +33,8 @@ export class PersonalRecordRepository {
    * most recent set.
    */
   async findRecords(
-    tx: Prisma.TransactionClient,
     params: RecordsParams,
+    tx?: Transaction,
   ): Promise<RecordRow[]> {
     const where = Prisma.join(
       [
@@ -48,7 +50,7 @@ export class PersonalRecordRepository {
     const columns = Prisma.sql`s.entry_id, s.set_index, s.reps, s.weight_kg, s.volume_kg,
       s.e1rm_kg, s.performed_at, s.local_date::text AS local_date`;
 
-    return tx.$queryRaw<RecordRow[]>`
+    return this.db(tx).$queryRaw<RecordRow[]>`
       (SELECT 'weight' AS metric, ${columns} FROM workout_sets s WHERE ${where}
         ORDER BY s.weight_kg DESC, s.performed_at DESC, s.id DESC LIMIT 1)
       UNION ALL
