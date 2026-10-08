@@ -177,13 +177,27 @@ export class WorkoutsService {
       await this.assertKnownMuscleGroup(query.muscleGroup);
     }
 
+    // Resolve filters on the small catalog first: when nothing matches there is no
+    // need to walk the user's history at all.
+    let exerciseIds: string[] | undefined;
+    if (query.exercise !== undefined || query.muscleGroup !== undefined) {
+      exerciseIds = await this.exercises.findIdsForFilter(tx, {
+        nameContains: query.exercise,
+        muscleGroup: query.muscleGroup,
+      });
+      if (exerciseIds.length === 0) {
+        return {
+          data: [],
+          pagination: { limit: query.limit, hasMore: false, nextCursor: null },
+          message: NO_WORKOUTS_MESSAGE,
+        };
+      }
+    }
+
     const rows = await this.workouts.findHistoryPage({
       tx,
       userId,
-      exerciseSearch: query.exercise
-        ? normalizeExerciseName(query.exercise)
-        : undefined,
-      muscleGroup: query.muscleGroup,
+      exerciseIds,
       from: query.from,
       to: query.to,
       after,

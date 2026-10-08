@@ -198,8 +198,8 @@ npm run test:e2e            # migrates, wipes and seeds everfit_test, then runs 
 npm run docs:check          # validates the OpenAPI document of a running built app
 ```
 
-- **Unit (101):** unit conversion (incl. adding `stone`), Epley and volume (incl. rounding pitfalls), decimal rounding, date and offset parsing, cursor encoding, env validation, log serializers, exception filter, validation error paths, catalog config validation, bulk-logging status counting, demo data generator (determinism, validation limits, local dates), EXPLAIN plan parsing and percentiles.
-- **E2E (84):** every endpoint through the real HTTP pipeline and Postgres:
+- **Unit (104):** unit conversion (incl. adding `stone`), Epley and volume (incl. rounding pitfalls), decimal rounding, date and offset parsing, cursor encoding, env validation, log serializers, exception filter, validation error paths, catalog config validation, bulk-logging status counting, demo data generator (determinism, validation limits, local dates), EXPLAIN plan parsing and percentiles.
+- **E2E (87):** every endpoint through the real HTTP pipeline and Postgres:
   - logging in mixed units, auto-created exercises
   - idempotent retries, concurrent identical and reversed-order requests
   - every validation edge case (invalid unit, null date, missing offset, future date, negative weight, zero reps, empty sets, limits, unknown fields)
@@ -227,13 +227,14 @@ Tests are named by behavior and assert exact values computed by hand, never re-c
 
 | Query | Plan | DB time | HTTP p50 / p95 |
 |---|---|---|---|
-| History, first page (20 / 100) | Index Scan on `(user_id, performed_at DESC, id DESC)`, stops after `limit + 1` rows, no sort | 0.24 / 0.50 ms | 3.3 / 4.5 ms |
-| History, deep page (cursor after 49,000 entries) | Same index, cursor becomes the index start | 0.15 ms | 3.6 / 4.8 ms |
-| History by exercise / muscle group / month | Unique key or history index, plus a semi-join on the 31-row catalog | 0.2–1.1 ms | 3.2 / 5.2 ms |
-| Sets for a page of 100 entries | `UNIQUE (entry_id, set_index)` | 0.10 ms | — |
-| PRs, all time | Three top-1 Index Scans on the `(user_id, exercise_id, <metric> DESC)` indexes | 0.07 ms | 2.8 / 3.0 ms |
-| PRs, one month / month vs month | Planner picks the metric index or `(user_id, exercise_id, local_date)` by range | 0.14–0.34 ms | 3.1 / 4.8 ms |
-| **Worst case:** exercise filter matching nothing | Walks every entry of the user (50,000 rows) | **13.8 ms** | 13.0 / 14.2 ms |
+| History, first page (20 / 100) | Index Scan on `(user_id, performed_at DESC, id DESC)`, stops after `limit + 1` rows, no sort | 0.30 / 0.48 ms | 3.4 / 5.8 ms |
+| History, deep page (cursor after 49,000 entries) | Same index, cursor becomes the index start | 0.15 ms | 3.7 / 5.3 ms |
+| History by exercise / muscle group (incl. with month and cursor) | Exercise ids resolved on the 31-row catalog first, then `exercise_id = ANY(…)` on the unique key or history index | 0.25–0.42 ms | 4.3–4.7 / 5.3–6.4 ms |
+| History for one month | History index bounded by the widened `performed_at` range, exact match on `local_date` | 0.49 ms | 4.2 / 5.4 ms |
+| Sets for a page of 100 entries | `UNIQUE (entry_id, set_index)` | 0.09 ms | — |
+| PRs, all time | Three top-1 Index Scans on the `(user_id, exercise_id, <metric> DESC)` indexes | 0.08 ms | 2.7 / 3.9 ms |
+| PRs, one month / month vs month | Planner picks the metric index or `(user_id, exercise_id, local_date)` by range | 0.12–0.28 ms | 3.1–3.6 / 4.5–5.1 ms |
+| Exercise filter matching nothing (former worst case) | Catalog lookup finds no ids, history is not queried | **0.01 ms** (was 13.8 ms) | 2.3 / 2.8 ms (was 13.0 / 14.2 ms) |
 
 Re-run with `npm run db:seed:demo && npm run build && npm run db:explain` (the app must be running for the HTTP columns).
 
@@ -241,7 +242,7 @@ Re-run with `npm run db:seed:demo && npm run build && npm run db:explain` (the a
 - Keyset pagination keeps the deepest page as fast as the first one: OFFSET would read and discard 49,000 rows.
 - Each PR is one index lookup that reads a handful of rows, independent of history size. The denormalized metric columns are what make this possible.
 - No new index is needed for the 50k target. A suggested `(user_id, exercise_id, performed_at DESC, id DESC)` index was measured and rejected: the existing unique key already orders entries within an exercise.
-- The only path that grows with history size is an exercise or muscle-group filter that matches few or no entries, because the history index is walked until `limit` matches are found. It stays under 20 ms at 50k entries. The fix is a query change, not an index: resolve the matching exercise ids first (return early when there are none) and read each exercise's entries through the unique key. This is the next optimization step.
+- The first measurement found one path that grew with history size: a filter matching no exercise walked all 50,000 entries (13.8 ms). Resolving exercise ids on the catalog first and returning early when there are none removed it (0.01 ms). The fix was a query change, not an index. For a filter that matches exercises the client rarely trains, the plan depends on the planner's estimate and may walk part of the history index; reading each exercise through the unique key makes this bounded at larger scale (see below).
 - About 3 ms of each HTTP request is the Nest pipeline, unit conversion and JSON; the database accounts for well under 1 ms.
 
 ## Trade-offs
@@ -254,7 +255,7 @@ Re-run with `npm run db:seed:demo && npm run build && npm run db:explain` (the a
 - **Zero tolerance for future timestamps.** A client clock running ahead can get a 400 for "now".
 - **Denormalized set columns** trade some write cost and storage for join-free, index-backed top-1 PR lookups.
 - **Unknown exercise names are added to the shared catalog.** Simple, and enough for one team; at scale this needs per-client custom exercises (see below).
-- **Filters that match few entries** walk the client's history index (13.8 ms worst case at 50,000 entries). Fine for the target; the fix is a query change, described below.
+- **Filters that match exercises the client rarely trains** still walk the client's history index until `limit` matches are found (a filter matching no exercise at all returns early). Fine for the target; the per-exercise read is described below.
 
 ## Scaling to 10,000 concurrent coaches
 
@@ -274,7 +275,7 @@ Assume millions of clients, 50 million entries in total (about 175 million sets)
 **What I would change, in order:**
 
 1. **Per-client custom exercises.** Unknown exercise names are currently added to one shared catalog. With millions of clients that catalog fills with near-duplicates ("squat", "pause squat", typos) that everyone sees. Add `exercises.owner_user_id` (null for the curated catalog) with unique `(owner_user_id, name_normalized)`; history and PRs resolve names against the curated catalog plus the client's own exercises. This is a data-correctness change and gets harder the longer it waits.
-2. **Resolve exercise ids before reading history.** An exercise or muscle-group filter that matches few of a client's entries walks the history index until `limit` matches are found (13.8 ms for a filter matching nothing at 50k entries, growing linearly). Resolve the matching exercise ids first (return early when there are none) and read each exercise's entries through the existing unique key `(user_id, exercise_id, performed_at)`, then merge. Cost then depends on the number of exercises times `limit`, not on history size. No new index is needed; an extra `(user_id, exercise_id, performed_at DESC, id DESC)` index was measured and rejected.
+2. **Read filtered history per exercise.** Exercise ids are already resolved on the catalog first, with an early return when none match (this removed the 13.8 ms worst case). An exercise or muscle-group filter that matches exercises the client rarely trains still walks the history index until `limit` matches are found. Read each matching exercise's entries through the existing unique key `(user_id, exercise_id, performed_at)` with a `LATERAL` subquery, then merge. Cost then depends on the number of exercises times `limit`, not on history size. No new index is needed; an extra `(user_id, exercise_id, performed_at DESC, id DESC)` index was measured and rejected.
 3. **Partition `workout_entries` and `workout_sets` by hash of `user_id`** (32–64 partitions). At the measured ratios (42 MB of sets and 61 MB of PR indexes per 175,000 sets) 175 million sets come to roughly 42 GB of table and 60 GB of PR indexes, which no longer fit in memory. Every query is per client, so partitions prune well, indexes per partition stay small, vacuum runs per partition, and the layout maps directly onto sharding by `user_id` (e.g. Citus) later.
 4. **Trigram index for name search** (`pg_trgm` GIN on `exercises.name_normalized`) once the catalog has tens of thousands of rows; `LIKE '%…%'` is a scan of a 31-row table today.
 5. **Planner statistics.** Statistics are averaged over all clients, so a heavy and a light client can get the same plan. Raise the statistics target on `user_id` and `exercise_id`, and catch regressions with `auto_explain`.

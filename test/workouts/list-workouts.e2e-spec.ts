@@ -197,6 +197,32 @@ describe('GET /api/v1/users/:userId/workouts (e2e)', () => {
     });
   });
 
+  it('returns the same empty page when the exercise filter matches no exercise', async () => {
+    await log([{ date: '2026-10-01T07:00:00+07:00', exerciseName: 'Squat' }]);
+
+    const res = await list({ exercise: 'zzzz' }).expect(200);
+
+    expect(res.body).toEqual({
+      data: [],
+      pagination: { limit: 20, hasMore: false, nextCursor: null },
+      message: 'No workouts found for the given filters',
+    });
+  });
+
+  it('applies exercise name and muscle group filters together', async () => {
+    await log([
+      { date: '2026-10-01T07:00:00+07:00', exerciseName: 'Bench Press' },
+      { date: '2026-10-02T07:00:00+07:00', exerciseName: 'Overhead Press' },
+      { date: '2026-10-03T07:00:00+07:00', exerciseName: 'Leg Press' },
+    ]);
+
+    const res = await list({ exercise: 'press', muscleGroup: 'chest' }).expect(
+      200,
+    );
+
+    expect(names(res.body)).toEqual(['Bench Press']);
+  });
+
   it('does not include other users’ workouts', async () => {
     await log(
       [{ date: '2026-10-01T07:00:00+07:00', exerciseName: 'Squat' }],

@@ -13,19 +13,19 @@
 
 | ID | Query | DB execution (ms) | Rows | Buffers hit / read | Scans | HTTP p50 / p95 (ms) |
 |---|---|---|---|---|---|---|
-| H1 | History, first page (limit 20) | 0.32 | 21 | 167 / 0 | Index Scan using workout_entries_user_performed_idx<br>Index Scan using exercises_pkey<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 3.06 / 4.09 |
-| H2 | History, first page (limit 100) | 0.53 | 101 | 797 / 0 | Index Scan using workout_entries_user_performed_idx<br>Index Scan using exercises_pkey<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 5.70 / 7.23 |
-| H3 | History, deep page (cursor after 49,000 entries) | 0.15 | 21 | 181 / 0 | Index Scan using workout_entries_user_performed_idx<br>Index Scan using exercises_pkey<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 3.43 / 4.14 |
-| H4 | History filtered by exercise name (squat) | 0.86 | 21 | 280 / 0 | Seq Scan on exercises<br>Bitmap Heap Scan on workout_entries<br>Bitmap Index Scan on workout_entries_user_exercise_performed_key<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 4.48 / 5.89 |
-| H5 | History filtered by muscle group (core) | 0.27 | 21 | 288 / 0 | Index Scan using workout_entries_user_performed_idx<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_slug_key<br>Index Scan using exercises_pkey<br>Index Scan using muscle_groups_pkey | 3.81 / 4.55 |
-| H6 | History for one month (2024-03) | 0.40 | 21 | 144 / 0 | Bitmap Heap Scan on workout_entries<br>Bitmap Index Scan on workout_entries_user_performed_idx<br>Seq Scan on exercises<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 3.32 / 5.04 |
-| H7 | History: muscle group + month + cursor | 0.24 | 21 | 169 / 0 | Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_slug_key<br>Index Scan using exercises_pkey<br>Index Scan using workout_entries_user_exercise_performed_key<br>Index Scan using muscle_groups_pkey | 3.75 / 4.18 |
-| H8 | Sets for a page of 100 entries | 0.10 | 364 | 169 / 0 | Index Scan using workout_sets_entry_id_set_index_key | n/a |
-| W1 | Worst case: exercise name matching nothing | 13.79 | 0 | 49810 / 0 | Index Scan using workout_entries_user_performed_idx<br>Index Scan using exercises_pkey<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 13.03 / 14.22 |
-| W2 | Worst case: PRs for the oldest, lightest month (2021-10) | 0.14 | 3 | 81 / 0 | Index Scan using workout_sets_user_exercise_local_date_idx | 2.80 / 3.15 |
-| R1 | PRs for deadlift, all time | 0.07 | 3 | 34 / 0 | Index Scan using workout_sets_pr_weight_idx<br>Index Scan using workout_sets_pr_volume_idx<br>Index Scan using workout_sets_pr_e1rm_idx | 2.81 / 3.66 |
-| R2 | PRs for deadlift, one month | 0.16 | 3 | 121 / 0 | Index Scan using workout_sets_pr_weight_idx<br>Index Scan using workout_sets_pr_volume_idx<br>Index Scan using workout_sets_pr_e1rm_idx | 2.72 / 3.13 |
-| R3 | PRs for deadlift, month vs previous month | 0.17 | 6 | 177 / 0 | Index Scan using workout_sets_pr_weight_idx<br>Index Scan using workout_sets_pr_volume_idx<br>Index Scan using workout_sets_pr_e1rm_idx | 4.52 / 5.74 |
+| H1 | History, first page (limit 20) | 0.30 | 21 | 167 / 0 | Index Scan using workout_entries_user_performed_idx<br>Index Scan using exercises_pkey<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 3.35 / 4.17 |
+| H2 | History, first page (limit 100) | 0.48 | 101 | 797 / 0 | Index Scan using workout_entries_user_performed_idx<br>Index Scan using exercises_pkey<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 5.80 / 7.36 |
+| H3 | History, deep page (cursor after 49,000 entries) | 0.15 | 21 | 181 / 0 | Index Scan using workout_entries_user_performed_idx<br>Index Scan using exercises_pkey<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 3.66 / 5.25 |
+| H4 | History filtered by exercise name (squat) | 0.25 | 23 | 585 / 0 | Seq Scan on exercises<br>Index Scan using workout_entries_user_performed_idx<br>Index Scan using exercises_pkey<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 4.67 / 6.39 |
+| H5 | History filtered by muscle group (core) | 0.42 | 24 | 330 / 0 | Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_slug_key<br>Index Only Scan using exercises_pkey<br>Index Scan using workout_entries_user_performed_idx<br>Index Scan using exercises_pkey<br>Index Scan using muscle_groups_pkey | 4.31 / 5.63 |
+| H6 | History for one month (2024-03) | 0.49 | 21 | 144 / 0 | Bitmap Heap Scan on workout_entries<br>Bitmap Index Scan on workout_entries_user_performed_idx<br>Seq Scan on exercises<br>Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_pkey | 4.17 / 5.44 |
+| H7 | History: muscle group + month + cursor | 0.28 | 28 | 355 / 0 | Seq Scan on exercise_muscle_groups<br>Index Scan using muscle_groups_slug_key<br>Index Only Scan using exercises_pkey<br>Index Scan using workout_entries_user_exercise_performed_key<br>Index Scan using exercises_pkey<br>Index Scan using muscle_groups_pkey | 4.27 / 5.25 |
+| H8 | Sets for a page of 100 entries | 0.09 | 364 | 169 / 0 | Index Scan using workout_sets_entry_id_set_index_key | n/a |
+| W1 | Worst case: exercise name matching nothing | 0.01 | 0 | 1 / 0 | Seq Scan on exercises | 2.29 / 2.79 |
+| W2 | Worst case: PRs for the oldest, lightest month (2021-10) | 0.21 | 3 | 81 / 0 | Index Scan using workout_sets_user_exercise_local_date_idx | 3.60 / 4.53 |
+| R1 | PRs for deadlift, all time | 0.08 | 3 | 34 / 0 | Index Scan using workout_sets_pr_weight_idx<br>Index Scan using workout_sets_pr_volume_idx<br>Index Scan using workout_sets_pr_e1rm_idx | 2.74 / 3.86 |
+| R2 | PRs for deadlift, one month | 0.12 | 3 | 121 / 0 | Index Scan using workout_sets_pr_weight_idx<br>Index Scan using workout_sets_pr_volume_idx<br>Index Scan using workout_sets_pr_e1rm_idx | 3.13 / 4.92 |
+| R3 | PRs for deadlift, month vs previous month | 0.28 | 6 | 177 / 0 | Index Scan using workout_sets_pr_weight_idx<br>Index Scan using workout_sets_pr_volume_idx<br>Index Scan using workout_sets_pr_e1rm_idx | 3.38 / 5.10 |
 
 ## Plans
 
@@ -34,11 +34,11 @@
 API: `GET /api/v1/users/perf-user/workouts?limit=20`
 
 ```text
-Limit  (cost=0.56..388.41 rows=21 width=136) (actual time=0.066..0.277 rows=21.00 loops=1)
+Limit  (cost=0.56..388.41 rows=21 width=136) (actual time=0.061..0.246 rows=21.00 loops=1)
   Buffers: shared hit=167
-  ->  Nested Loop  (cost=0.56..922401.00 rows=49944 width=136) (actual time=0.065..0.274 rows=21.00 loops=1)
+  ->  Nested Loop  (cost=0.56..922401.00 rows=49944 width=136) (actual time=0.060..0.244 rows=21.00 loops=1)
         Buffers: shared hit=167
-        ->  Index Scan using workout_entries_user_performed_idx on workout_entries e  (cost=0.41..6642.46 rows=49944 width=44) (actual time=0.020..0.042 rows=21.00 loops=1)
+        ->  Index Scan using workout_entries_user_performed_idx on workout_entries e  (cost=0.41..6642.46 rows=49944 width=44) (actual time=0.016..0.033 rows=21.00 loops=1)
               Index Cond: (user_id = 'perf-user'::text)
               Index Searches: 1
               Buffers: shared hit=24
@@ -63,8 +63,8 @@ Limit  (cost=0.56..388.41 rows=21 width=136) (actual time=0.066..0.277 rows=21.0
                                   Index Cond: (id = emg.muscle_group_id)
                                   Index Searches: 40
                                   Buffers: shared hit=80
-Planning Time: 0.170 ms
-Execution Time: 0.318 ms
+Planning Time: 0.182 ms
+Execution Time: 0.296 ms
 ```
 
 ### H2: History, first page (limit 100)
@@ -72,11 +72,11 @@ Execution Time: 0.318 ms
 API: `GET /api/v1/users/perf-user/workouts?limit=100`
 
 ```text
-Limit  (cost=0.56..1865.90 rows=101 width=136) (actual time=0.046..0.501 rows=101.00 loops=1)
+Limit  (cost=0.56..1865.90 rows=101 width=136) (actual time=0.027..0.458 rows=101.00 loops=1)
   Buffers: shared hit=797
-  ->  Nested Loop  (cost=0.56..922401.00 rows=49944 width=136) (actual time=0.046..0.496 rows=101.00 loops=1)
+  ->  Nested Loop  (cost=0.56..922401.00 rows=49944 width=136) (actual time=0.026..0.454 rows=101.00 loops=1)
         Buffers: shared hit=797
-        ->  Index Scan using workout_entries_user_performed_idx on workout_entries e  (cost=0.41..6642.46 rows=49944 width=44) (actual time=0.013..0.031 rows=101.00 loops=1)
+        ->  Index Scan using workout_entries_user_performed_idx on workout_entries e  (cost=0.41..6642.46 rows=49944 width=44) (actual time=0.008..0.025 rows=101.00 loops=1)
               Index Cond: (user_id = 'perf-user'::text)
               Index Searches: 1
               Buffers: shared hit=104
@@ -91,7 +91,7 @@ Limit  (cost=0.56..1865.90 rows=101 width=136) (actual time=0.046..0.501 rows=10
                       Sort Key: mg.sort_order
                       Sort Method: quicksort  Memory: 25kB
                       Buffers: shared hit=491
-                      ->  Nested Loop  (cost=0.15..18.13 rows=2 width=36) (actual time=0.002..0.003 rows=1.93 loops=101)
+                      ->  Nested Loop  (cost=0.15..18.13 rows=2 width=36) (actual time=0.001..0.003 rows=1.93 loops=101)
                             Buffers: shared hit=491
                             ->  Seq Scan on exercise_muscle_groups emg  (cost=0.00..1.77 rows=2 width=4) (actual time=0.001..0.002 rows=1.93 loops=101)
                                   Filter: (exercise_id = ex.id)
@@ -101,8 +101,8 @@ Limit  (cost=0.56..1865.90 rows=101 width=136) (actual time=0.046..0.501 rows=10
                                   Index Cond: (id = emg.muscle_group_id)
                                   Index Searches: 195
                                   Buffers: shared hit=390
-Planning Time: 0.097 ms
-Execution Time: 0.530 ms
+Planning Time: 0.088 ms
+Execution Time: 0.481 ms
 ```
 
 ### H3: History, deep page (cursor after 49,000 entries)
@@ -110,11 +110,11 @@ Execution Time: 0.530 ms
 API: `GET /api/v1/users/perf-user/workouts?limit=20&cursor=eyJ0IjoiMjAyMS0xMC0zMFQxMjoyMDowMC4wMDBaIiwiaWQiOiIwMWExMWI3NS1jNmNlLTc3ODItYTI2OS1lZjcyOTdmNDg0MDgifQ`
 
 ```text
-Limit  (cost=0.56..427.18 rows=21 width=136) (actual time=0.026..0.115 rows=21.00 loops=1)
+Limit  (cost=0.56..427.18 rows=21 width=136) (actual time=0.028..0.120 rows=21.00 loops=1)
   Buffers: shared hit=181
-  ->  Nested Loop  (cost=0.56..17207.35 rows=847 width=136) (actual time=0.026..0.114 rows=21.00 loops=1)
+  ->  Nested Loop  (cost=0.56..17207.35 rows=847 width=136) (actual time=0.027..0.119 rows=21.00 loops=1)
         Buffers: shared hit=181
-        ->  Index Scan using workout_entries_user_performed_idx on workout_entries e  (cost=0.41..1629.87 rows=847 width=44) (actual time=0.009..0.013 rows=21.00 loops=1)
+        ->  Index Scan using workout_entries_user_performed_idx on workout_entries e  (cost=0.41..1629.87 rows=847 width=44) (actual time=0.011..0.015 rows=21.00 loops=1)
               Index Cond: ((user_id = 'perf-user'::text) AND (ROW(performed_at, id) < ROW('2021-10-30 12:20:00+00'::timestamp with time zone, '01a11b75-c6ce-7782-a269-ef7297f48408'::uuid)))
               Index Searches: 1
               Buffers: shared hit=24
@@ -125,7 +125,7 @@ Limit  (cost=0.56..427.18 rows=21 width=136) (actual time=0.026..0.115 rows=21.0
         SubPlan 1
           ->  Aggregate  (cost=18.15..18.16 rows=1 width=32) (actual time=0.004..0.004 rows=1.00 loops=21)
                 Buffers: shared hit=115
-                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (actual time=0.003..0.003 rows=2.24 loops=21)
+                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (actual time=0.003..0.004 rows=2.24 loops=21)
                       Sort Key: mg.sort_order
                       Sort Method: quicksort  Memory: 25kB
                       Buffers: shared hit=115
@@ -139,7 +139,7 @@ Limit  (cost=0.56..427.18 rows=21 width=136) (actual time=0.026..0.115 rows=21.0
                                   Index Cond: (id = emg.muscle_group_id)
                                   Index Searches: 47
                                   Buffers: shared hit=94
-Planning Time: 0.091 ms
+Planning Time: 0.114 ms
 Execution Time: 0.147 ms
 ```
 
@@ -148,47 +148,48 @@ Execution Time: 0.147 ms
 API: `GET /api/v1/users/perf-user/workouts?limit=20&exercise=squat`
 
 ```text
-Limit  (cost=1298.19..1679.97 rows=21 width=136) (actual time=0.754..0.835 rows=21.00 loops=1)
-  Buffers: shared hit=280
-  ->  Result  (cost=1298.19..2588.96 rows=71 width=136) (actual time=0.754..0.834 rows=21.00 loops=1)
-        Buffers: shared hit=280
-        ->  Sort  (cost=1298.19..1298.37 rows=71 width=104) (actual time=0.740..0.740 rows=21.00 loops=1)
-              Sort Key: e.performed_at DESC, e.id DESC
-              Sort Method: top-N heapsort  Memory: 30kB
-              Buffers: shared hit=133
-              ->  Nested Loop  (cost=96.93..1296.28 rows=71 width=104) (actual time=0.047..0.549 rows=3225.00 loops=1)
-                    Buffers: shared hit=133
-                    ->  Seq Scan on exercises  (cost=0.00..18.75 rows=1 width=48) (actual time=0.003..0.005 rows=2.00 loops=1)
-                          Filter: (name_normalized ~~ '%squat%'::text)
-                          Rows Removed by Filter: 29
-                          Buffers: shared hit=1
-                    ->  Bitmap Heap Scan on workout_entries e  (cost=96.93..1261.06 rows=1611 width=44) (actual time=0.039..0.104 rows=1612.50 loops=2)
-                          Recheck Cond: ((user_id = 'perf-user'::text) AND (exercise_id = exercises.id))
-                          Heap Blocks: exact=88
-                          Buffers: shared hit=132
-                          ->  Bitmap Index Scan on workout_entries_user_exercise_performed_key  (cost=0.00..96.53 rows=1611 width=0) (actual time=0.035..0.035 rows=1612.50 loops=2)
-                                Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = exercises.id))
-                                Index Searches: 2
-                                Buffers: shared hit=44
+Seq Scan on exercises ex  (cost=0.00..18.75 rows=1 width=16) (actual time=0.003..0.005 rows=2.00 loops=1)
+  Filter: (name_normalized ~~ '%squat%'::text)
+  Rows Removed by Filter: 29
+  Buffers: shared hit=1
+Planning Time: 0.013 ms
+Execution Time: 0.008 ms
+```
+
+```text
+Limit  (cost=0.56..430.07 rows=21 width=136) (actual time=0.066..0.220 rows=21.00 loops=1)
+  Buffers: shared hit=584
+  ->  Nested Loop  (cost=0.56..65816.45 rows=3218 width=136) (actual time=0.066..0.219 rows=21.00 loops=1)
+        Buffers: shared hit=584
+        ->  Index Scan using workout_entries_user_performed_idx on workout_entries e  (cost=0.41..6767.32 rows=3218 width=44) (actual time=0.028..0.076 rows=21.00 loops=1)
+              Index Cond: (user_id = 'perf-user'::text)
+              Filter: (exercise_id = ANY ('{d0ca4841-add3-423c-8d5b-a2d526a58108,219f8e44-047e-4db8-beeb-3f777aa6e95c}'::uuid[]))
+              Rows Removed by Filter: 372
+              Index Searches: 1
+              Buffers: shared hit=395
+        ->  Index Scan using exercises_pkey on exercises ex  (cost=0.15..0.18 rows=1 width=48) (actual time=0.001..0.001 rows=1.00 loops=21)
+              Index Cond: (id = e.exercise_id)
+              Index Searches: 21
+              Buffers: shared hit=42
         SubPlan 1
-          ->  Aggregate  (cost=18.15..18.16 rows=1 width=32) (actual time=0.004..0.004 rows=1.00 loops=21)
+          ->  Aggregate  (cost=18.15..18.16 rows=1 width=32) (actual time=0.005..0.005 rows=1.00 loops=21)
                 Buffers: shared hit=147
-                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (actual time=0.004..0.004 rows=3.00 loops=21)
+                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (actual time=0.004..0.005 rows=3.00 loops=21)
                       Sort Key: mg.sort_order
                       Sort Method: quicksort  Memory: 25kB
                       Buffers: shared hit=147
-                      ->  Nested Loop  (cost=0.15..18.13 rows=2 width=36) (actual time=0.002..0.003 rows=3.00 loops=21)
+                      ->  Nested Loop  (cost=0.15..18.13 rows=2 width=36) (actual time=0.002..0.004 rows=3.00 loops=21)
                             Buffers: shared hit=147
                             ->  Seq Scan on exercise_muscle_groups emg  (cost=0.00..1.77 rows=2 width=4) (actual time=0.001..0.002 rows=3.00 loops=21)
-                                  Filter: (exercise_id = exercises.id)
+                                  Filter: (exercise_id = ex.id)
                                   Rows Removed by Filter: 59
                                   Buffers: shared hit=21
                             ->  Index Scan using muscle_groups_pkey on muscle_groups mg  (cost=0.15..8.17 rows=1 width=40) (actual time=0.000..0.000 rows=1.00 loops=63)
                                   Index Cond: (id = emg.muscle_group_id)
                                   Index Searches: 63
                                   Buffers: shared hit=126
-Planning Time: 0.115 ms
-Execution Time: 0.861 ms
+Planning Time: 0.124 ms
+Execution Time: 0.245 ms
 ```
 
 ### H5: History filtered by muscle group (core)
@@ -196,63 +197,67 @@ Execution Time: 0.861 ms
 API: `GET /api/v1/users/perf-user/workouts?limit=20&muscleGroup=core`
 
 ```text
-Limit  (cost=8.75..487.17 rows=21 width=136) (actual time=0.078..0.214 rows=21.00 loops=1)
-  Buffers: shared hit=288
-  ->  Nested Loop  (cost=8.75..36732.88 rows=1612 width=136) (actual time=0.078..0.213 rows=21.00 loops=1)
-        Buffers: shared hit=288
-        ->  Nested Loop Semi Join  (cost=8.59..7401.59 rows=1612 width=60) (actual time=0.043..0.103 rows=21.00 loops=1)
-              Join Filter: (e.exercise_id = emg.exercise_id)
-              Rows Removed by Join Filter: 555
-              Buffers: shared hit=203
-              ->  Index Scan using workout_entries_user_performed_idx on workout_entries e  (cost=0.41..6642.46 rows=49944 width=44) (actual time=0.009..0.037 rows=200.00 loops=1)
-                    Index Cond: (user_id = 'perf-user'::text)
-                    Index Searches: 1
-                    Buffers: shared hit=200
-              ->  Materialize  (cost=8.18..9.97 rows=1 width=16) (actual time=0.000..0.000 rows=2.88 loops=200)
-                    Storage: Memory  Maximum Storage: 17kB
-                    Buffers: shared hit=3
-                    ->  Hash Join  (cost=8.18..9.96 rows=1 width=16) (actual time=0.019..0.020 rows=3.00 loops=1)
-                          Hash Cond: (emg.muscle_group_id = mg.id)
-                          Buffers: shared hit=3
-                          ->  Seq Scan on exercise_muscle_groups emg  (cost=0.00..1.62 rows=62 width=20) (actual time=0.001..0.003 rows=62.00 loops=1)
-                                Buffers: shared hit=1
-                          ->  Hash  (cost=8.17..8.17 rows=1 width=4) (actual time=0.013..0.013 rows=1.00 loops=1)
-                                Buckets: 1024  Batches: 1  Memory Usage: 9kB
-                                Buffers: shared hit=2
-                                ->  Index Scan using muscle_groups_slug_key on muscle_groups mg  (cost=0.15..8.17 rows=1 width=4) (actual time=0.007..0.007 rows=1.00 loops=1)
-                                      Index Cond: (slug = 'core'::text)
-                                      Index Searches: 1
-                                      Buffers: shared hit=2
-        ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.001..0.001 rows=1.00 loops=21)
-              Cache Key: e.exercise_id
-              Cache Mode: logical
-              Hits: 18  Misses: 3  Evictions: 0  Overflows: 0  Memory Usage: 1kB
-              Buffers: shared hit=6
-              ->  Index Scan using exercises_pkey on exercises ex  (cost=0.15..0.17 rows=1 width=48) (actual time=0.003..0.003 rows=1.00 loops=3)
-                    Index Cond: (id = e.exercise_id)
-                    Index Searches: 3
-                    Buffers: shared hit=6
+Nested Loop  (cost=10.12..11.70 rows=1 width=16) (actual time=0.039..0.043 rows=3.00 loops=1)
+  Buffers: shared hit=9
+  ->  HashAggregate  (cost=9.97..9.98 rows=1 width=16) (actual time=0.030..0.031 rows=3.00 loops=1)
+        Group Key: emg.exercise_id
+        Batches: 1  Memory Usage: 32kB
+        Buffers: shared hit=3
+        ->  Hash Join  (cost=8.18..9.96 rows=1 width=16) (actual time=0.024..0.028 rows=3.00 loops=1)
+              Hash Cond: (emg.muscle_group_id = mg.id)
+              Buffers: shared hit=3
+              ->  Seq Scan on exercise_muscle_groups emg  (cost=0.00..1.62 rows=62 width=20) (actual time=0.006..0.009 rows=62.00 loops=1)
+                    Buffers: shared hit=1
+              ->  Hash  (cost=8.17..8.17 rows=1 width=4) (actual time=0.011..0.011 rows=1.00 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    Buffers: shared hit=2
+                    ->  Index Scan using muscle_groups_slug_key on muscle_groups mg  (cost=0.15..8.17 rows=1 width=4) (actual time=0.007..0.008 rows=1.00 loops=1)
+                          Index Cond: (slug = 'core'::text)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+  ->  Index Only Scan using exercises_pkey on exercises ex  (cost=0.15..1.72 rows=1 width=16) (actual time=0.003..0.003 rows=1.00 loops=3)
+        Index Cond: (id = emg.exercise_id)
+        Heap Fetches: 3
+        Index Searches: 3
+        Buffers: shared hit=6
+Planning Time: 0.122 ms
+Execution Time: 0.072 ms
+```
+
+```text
+Limit  (cost=0.56..415.64 rows=21 width=136) (actual time=0.041..0.311 rows=21.00 loops=1)
+  Buffers: shared hit=321
+  ->  Nested Loop  (cost=0.56..94994.47 rows=4806 width=136) (actual time=0.041..0.309 rows=21.00 loops=1)
+        Buffers: shared hit=321
+        ->  Index Scan using workout_entries_user_performed_idx on workout_entries e  (cost=0.41..6829.75 rows=4806 width=44) (actual time=0.017..0.081 rows=21.00 loops=1)
+              Index Cond: (user_id = 'perf-user'::text)
+              Filter: (exercise_id = ANY ('{219f8e44-047e-4db8-beeb-3f777aa6e95c,25b989b3-d85c-45a8-abc8-94e71e0d9f92,9ec4ecf4-6a0e-4918-823e-430165bbcabc}'::uuid[]))
+              Rows Removed by Filter: 179
+              Index Searches: 1
+              Buffers: shared hit=200
+        ->  Index Scan using exercises_pkey on exercises ex  (cost=0.15..0.18 rows=1 width=48) (actual time=0.001..0.001 rows=1.00 loops=21)
+              Index Cond: (id = e.exercise_id)
+              Index Searches: 21
+              Buffers: shared hit=42
         SubPlan 1
-          ->  Aggregate  (cost=18.15..18.16 rows=1 width=32) (actual time=0.004..0.004 rows=1.00 loops=21)
+          ->  Aggregate  (cost=18.15..18.16 rows=1 width=32) (actual time=0.009..0.009 rows=1.00 loops=21)
                 Buffers: shared hit=79
-                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (actual time=0.004..0.004 rows=1.38 loops=21)
-                      Sort Key: mg_1.sort_order
+                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (actual time=0.008..0.008 rows=1.38 loops=21)
+                      Sort Key: mg.sort_order
                       Sort Method: quicksort  Memory: 25kB
                       Buffers: shared hit=79
-                      ->  Nested Loop  (cost=0.15..18.13 rows=2 width=36) (actual time=0.003..0.003 rows=1.38 loops=21)
+                      ->  Nested Loop  (cost=0.15..18.13 rows=2 width=36) (actual time=0.005..0.006 rows=1.38 loops=21)
                             Buffers: shared hit=79
-                            ->  Seq Scan on exercise_muscle_groups emg_1  (cost=0.00..1.77 rows=2 width=4) (actual time=0.002..0.002 rows=1.38 loops=21)
+                            ->  Seq Scan on exercise_muscle_groups emg  (cost=0.00..1.77 rows=2 width=4) (actual time=0.002..0.004 rows=1.38 loops=21)
                                   Filter: (exercise_id = ex.id)
                                   Rows Removed by Filter: 61
                                   Buffers: shared hit=21
-                            ->  Index Scan using muscle_groups_pkey on muscle_groups mg_1  (cost=0.15..8.17 rows=1 width=40) (actual time=0.001..0.001 rows=1.00 loops=29)
-                                  Index Cond: (id = emg_1.muscle_group_id)
+                            ->  Index Scan using muscle_groups_pkey on muscle_groups mg  (cost=0.15..8.17 rows=1 width=40) (actual time=0.001..0.001 rows=1.00 loops=29)
+                                  Index Cond: (id = emg.muscle_group_id)
                                   Index Searches: 29
                                   Buffers: shared hit=58
-Planning:
-  Buffers: shared hit=4
-Planning Time: 0.198 ms
-Execution Time: 0.273 ms
+Planning Time: 0.171 ms
+Execution Time: 0.352 ms
 ```
 
 ### H6: History for one month (2024-03)
@@ -260,51 +265,51 @@ Execution Time: 0.273 ms
 API: `GET /api/v1/users/perf-user/workouts?limit=20&from=2024-03-01&to=2024-03-31`
 
 ```text
-Limit  (cost=1110.58..1292.38 rows=10 width=136) (actual time=0.289..0.368 rows=21.00 loops=1)
+Limit  (cost=1110.58..1292.38 rows=10 width=136) (actual time=0.349..0.438 rows=21.00 loops=1)
   Buffers: shared hit=144
-  ->  Result  (cost=1110.58..1292.38 rows=10 width=136) (actual time=0.289..0.367 rows=21.00 loops=1)
+  ->  Result  (cost=1110.58..1292.38 rows=10 width=136) (actual time=0.349..0.436 rows=21.00 loops=1)
         Buffers: shared hit=144
-        ->  Sort  (cost=1110.58..1110.61 rows=10 width=104) (actual time=0.271..0.272 rows=21.00 loops=1)
+        ->  Sort  (cost=1110.58..1110.61 rows=10 width=104) (actual time=0.322..0.323 rows=21.00 loops=1)
               Sort Key: e.performed_at DESC, e.id DESC
               Sort Method: top-N heapsort  Memory: 30kB
               Buffers: shared hit=43
-              ->  Hash Join  (cost=75.16..1110.42 rows=10 width=104) (actual time=0.037..0.213 rows=836.00 loops=1)
+              ->  Hash Join  (cost=75.16..1110.42 rows=10 width=104) (actual time=0.047..0.257 rows=836.00 loops=1)
                     Hash Cond: (e.exercise_id = ex.id)
                     Buffers: shared hit=43
-                    ->  Bitmap Heap Scan on workout_entries e  (cost=49.40..1084.59 rows=10 width=44) (actual time=0.026..0.080 rows=836.00 loops=1)
+                    ->  Bitmap Heap Scan on workout_entries e  (cost=49.40..1084.59 rows=10 width=44) (actual time=0.031..0.095 rows=836.00 loops=1)
                           Recheck Cond: ((user_id = 'perf-user'::text) AND (performed_at >= '2024-02-29 10:00:00+00'::timestamp with time zone) AND (performed_at < '2024-04-01 14:00:00+00'::timestamp with time zone))
                           Filter: ((local_date >= '2024-03-01'::date) AND (local_date <= '2024-03-31'::date))
                           Rows Removed by Filter: 29
                           Heap Blocks: exact=25
                           Buffers: shared hit=42
-                          ->  Bitmap Index Scan on workout_entries_user_performed_idx  (cost=0.00..49.40 rows=719 width=0) (actual time=0.022..0.022 rows=865.00 loops=1)
+                          ->  Bitmap Index Scan on workout_entries_user_performed_idx  (cost=0.00..49.40 rows=719 width=0) (actual time=0.027..0.027 rows=865.00 loops=1)
                                 Index Cond: ((user_id = 'perf-user'::text) AND (performed_at >= '2024-02-29 10:00:00+00'::timestamp with time zone) AND (performed_at < '2024-04-01 14:00:00+00'::timestamp with time zone))
                                 Index Searches: 1
                                 Buffers: shared hit=17
-                    ->  Hash  (cost=17.00..17.00 rows=700 width=48) (actual time=0.007..0.007 rows=31.00 loops=1)
+                    ->  Hash  (cost=17.00..17.00 rows=700 width=48) (actual time=0.008..0.008 rows=31.00 loops=1)
                           Buckets: 1024  Batches: 1  Memory Usage: 10kB
                           Buffers: shared hit=1
-                          ->  Seq Scan on exercises ex  (cost=0.00..17.00 rows=700 width=48) (actual time=0.002..0.003 rows=31.00 loops=1)
+                          ->  Seq Scan on exercises ex  (cost=0.00..17.00 rows=700 width=48) (actual time=0.002..0.004 rows=31.00 loops=1)
                                 Buffers: shared hit=1
         SubPlan 1
-          ->  Aggregate  (cost=18.15..18.16 rows=1 width=32) (actual time=0.004..0.004 rows=1.00 loops=21)
+          ->  Aggregate  (cost=18.15..18.16 rows=1 width=32) (actual time=0.005..0.005 rows=1.00 loops=21)
                 Buffers: shared hit=101
-                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (actual time=0.004..0.004 rows=1.90 loops=21)
+                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (actual time=0.005..0.005 rows=1.90 loops=21)
                       Sort Key: mg.sort_order
                       Sort Method: quicksort  Memory: 25kB
                       Buffers: shared hit=101
-                      ->  Nested Loop  (cost=0.15..18.13 rows=2 width=36) (actual time=0.002..0.003 rows=1.90 loops=21)
+                      ->  Nested Loop  (cost=0.15..18.13 rows=2 width=36) (actual time=0.002..0.004 rows=1.90 loops=21)
                             Buffers: shared hit=101
                             ->  Seq Scan on exercise_muscle_groups emg  (cost=0.00..1.77 rows=2 width=4) (actual time=0.001..0.002 rows=1.90 loops=21)
                                   Filter: (exercise_id = ex.id)
                                   Rows Removed by Filter: 60
                                   Buffers: shared hit=21
-                            ->  Index Scan using muscle_groups_pkey on muscle_groups mg  (cost=0.15..8.17 rows=1 width=40) (actual time=0.000..0.000 rows=1.00 loops=40)
+                            ->  Index Scan using muscle_groups_pkey on muscle_groups mg  (cost=0.15..8.17 rows=1 width=40) (actual time=0.001..0.001 rows=1.00 loops=40)
                                   Index Cond: (id = emg.muscle_group_id)
                                   Index Searches: 40
                                   Buffers: shared hit=80
-Planning Time: 0.096 ms
-Execution Time: 0.403 ms
+Planning Time: 0.116 ms
+Execution Time: 0.490 ms
 ```
 
 ### H7: History: muscle group + month + cursor
@@ -312,76 +317,84 @@ Execution Time: 0.403 ms
 API: `GET /api/v1/users/perf-user/workouts?limit=20&muscleGroup=back&from=2024-03-01&to=2024-03-31&cursor=eyJ0IjoiMjAyNC0wMy0xNVQxMjowNTowMC4wMDBaIiwiaWQiOiIwMWExMWI3OS01MzRlLTcwNjgtOWExYS1lMzY0NzE0YTcyNmEifQ`
 
 ```text
-Limit  (cost=20.31..38.49 rows=1 width=136) (actual time=0.105..0.191 rows=21.00 loops=1)
-  Buffers: shared hit=169
-  ->  Result  (cost=20.31..38.49 rows=1 width=136) (actual time=0.105..0.190 rows=21.00 loops=1)
-        Buffers: shared hit=169
-        ->  Sort  (cost=20.31..20.32 rows=1 width=104) (actual time=0.084..0.085 rows=21.00 loops=1)
+Nested Loop  (cost=10.12..11.70 rows=1 width=16) (actual time=0.022..0.025 rows=7.00 loops=1)
+  Buffers: shared hit=17
+  ->  HashAggregate  (cost=9.97..9.98 rows=1 width=16) (actual time=0.016..0.016 rows=7.00 loops=1)
+        Group Key: emg.exercise_id
+        Batches: 1  Memory Usage: 32kB
+        Buffers: shared hit=3
+        ->  Hash Join  (cost=8.18..9.96 rows=1 width=16) (actual time=0.011..0.014 rows=7.00 loops=1)
+              Hash Cond: (emg.muscle_group_id = mg.id)
+              Buffers: shared hit=3
+              ->  Seq Scan on exercise_muscle_groups emg  (cost=0.00..1.62 rows=62 width=20) (actual time=0.004..0.005 rows=62.00 loops=1)
+                    Buffers: shared hit=1
+              ->  Hash  (cost=8.17..8.17 rows=1 width=4) (actual time=0.006..0.006 rows=1.00 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    Buffers: shared hit=2
+                    ->  Index Scan using muscle_groups_slug_key on muscle_groups mg  (cost=0.15..8.17 rows=1 width=4) (actual time=0.004..0.004 rows=1.00 loops=1)
+                          Index Cond: (slug = 'back'::text)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+  ->  Index Only Scan using exercises_pkey on exercises ex  (cost=0.15..1.72 rows=1 width=16) (actual time=0.001..0.001 rows=1.00 loops=7)
+        Index Cond: (id = emg.exercise_id)
+        Heap Fetches: 7
+        Index Searches: 7
+        Buffers: shared hit=14
+Planning Time: 0.058 ms
+Execution Time: 0.039 ms
+```
+
+```text
+Limit  (cost=230.17..248.36 rows=1 width=136) (actual time=0.094..0.221 rows=21.00 loops=1)
+  Buffers: shared hit=338
+  ->  Result  (cost=230.17..248.36 rows=1 width=136) (actual time=0.094..0.220 rows=21.00 loops=1)
+        Buffers: shared hit=338
+        ->  Sort  (cost=230.17..230.18 rows=1 width=104) (actual time=0.084..0.084 rows=21.00 loops=1)
               Sort Key: e.performed_at DESC, e.id DESC
-              Sort Method: top-N heapsort  Memory: 30kB
-              Buffers: shared hit=48
-              ->  Nested Loop  (cost=10.53..20.30 rows=1 width=104) (actual time=0.040..0.076 rows=92.00 loops=1)
-                    Buffers: shared hit=48
-                    ->  Nested Loop  (cost=10.12..11.70 rows=1 width=64) (actual time=0.027..0.031 rows=7.00 loops=1)
-                          Buffers: shared hit=17
-                          ->  HashAggregate  (cost=9.97..9.98 rows=1 width=16) (actual time=0.020..0.021 rows=7.00 loops=1)
-                                Group Key: emg.exercise_id
-                                Batches: 1  Memory Usage: 32kB
-                                Buffers: shared hit=3
-                                ->  Hash Join  (cost=8.18..9.96 rows=1 width=16) (actual time=0.016..0.019 rows=7.00 loops=1)
-                                      Hash Cond: (emg.muscle_group_id = mg.id)
-                                      Buffers: shared hit=3
-                                      ->  Seq Scan on exercise_muscle_groups emg  (cost=0.00..1.62 rows=62 width=20) (actual time=0.001..0.003 rows=62.00 loops=1)
-                                            Buffers: shared hit=1
-                                      ->  Hash  (cost=8.17..8.17 rows=1 width=4) (actual time=0.010..0.010 rows=1.00 loops=1)
-                                            Buckets: 1024  Batches: 1  Memory Usage: 9kB
-                                            Buffers: shared hit=2
-                                            ->  Index Scan using muscle_groups_slug_key on muscle_groups mg  (cost=0.15..8.17 rows=1 width=4) (actual time=0.005..0.005 rows=1.00 loops=1)
-                                                  Index Cond: (slug = 'back'::text)
-                                                  Index Searches: 1
-                                                  Buffers: shared hit=2
-                          ->  Index Scan using exercises_pkey on exercises ex  (cost=0.15..1.72 rows=1 width=48) (actual time=0.001..0.001 rows=1.00 loops=7)
-                                Index Cond: (id = emg.exercise_id)
-                                Index Searches: 7
-                                Buffers: shared hit=14
-                    ->  Index Scan using workout_entries_user_exercise_performed_key on workout_entries e  (cost=0.41..8.59 rows=1 width=44) (actual time=0.004..0.005 rows=13.14 loops=7)
-                          Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = ex.id) AND (performed_at >= '2024-02-29 10:00:00+00'::timestamp with time zone) AND (performed_at < '2024-04-01 14:00:00+00'::timestamp with time zone) AND (performed_at <= '2024-03-15 12:05:00+00'::timestamp with time zone))
+              Sort Method: top-N heapsort  Memory: 29kB
+              Buffers: shared hit=217
+              ->  Nested Loop  (cost=0.56..230.16 rows=1 width=104) (actual time=0.011..0.074 rows=92.00 loops=1)
+                    Buffers: shared hit=217
+                    ->  Index Scan using workout_entries_user_exercise_performed_key on workout_entries e  (cost=0.41..221.97 rows=1 width=44) (actual time=0.008..0.032 rows=92.00 loops=1)
+                          Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = ANY ('{dcbf0051-853f-4a05-a3e0-06c544a2157d,f5340d46-c745-4908-8b3a-0d0524e2a832,0007f894-c20c-4e22-9b1e-782cfcc236dc,d38b10a3-489f-41b2-aba9-17a08bf121e8,b6fe65d3-d518-4282-9229-76d01be06230,2686a03f-a4e4-411b-a87a-94c4004757b2,80541ded-d829-481f-b945-06589f0f0f3d}'::uuid[])) AND (performed_at >= '2024-02-29 10:00:00+00'::timestamp with time zone) AND (performed_at < '2024-04-01 14:00:00+00'::timestamp with time zone) AND (performed_at <= '2024-03-15 12:05:00+00'::timestamp with time zone))
                           Filter: ((local_date >= '2024-03-01'::date) AND (local_date <= '2024-03-31'::date) AND (ROW(performed_at, id) < ROW('2024-03-15 12:05:00+00'::timestamp with time zone, '01a11b79-534e-7068-9a1a-e364714a726a'::uuid)))
-                          Rows Removed by Filter: 0
+                          Rows Removed by Filter: 1
                           Index Searches: 7
-                          Buffers: shared hit=31
+                          Buffers: shared hit=33
+                    ->  Index Scan using exercises_pkey on exercises ex  (cost=0.15..8.17 rows=1 width=48) (actual time=0.000..0.000 rows=1.00 loops=92)
+                          Index Cond: (id = e.exercise_id)
+                          Index Searches: 92
+                          Buffers: shared hit=184
         SubPlan 1
-          ->  Aggregate  (cost=18.15..18.16 rows=1 width=32) (actual time=0.005..0.005 rows=1.00 loops=21)
+          ->  Aggregate  (cost=18.15..18.16 rows=1 width=32) (actual time=0.006..0.006 rows=1.00 loops=21)
                 Buffers: shared hit=121
-                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (actual time=0.004..0.004 rows=2.38 loops=21)
-                      Sort Key: mg_1.sort_order
+                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (actual time=0.005..0.005 rows=2.38 loops=21)
+                      Sort Key: mg.sort_order
                       Sort Method: quicksort  Memory: 25kB
                       Buffers: shared hit=121
                       ->  Nested Loop  (cost=0.15..18.13 rows=2 width=36) (actual time=0.001..0.003 rows=2.38 loops=21)
                             Buffers: shared hit=121
-                            ->  Seq Scan on exercise_muscle_groups emg_1  (cost=0.00..1.77 rows=2 width=4) (actual time=0.001..0.002 rows=2.38 loops=21)
+                            ->  Seq Scan on exercise_muscle_groups emg  (cost=0.00..1.77 rows=2 width=4) (actual time=0.001..0.002 rows=2.38 loops=21)
                                   Filter: (exercise_id = ex.id)
                                   Rows Removed by Filter: 60
                                   Buffers: shared hit=21
-                            ->  Index Scan using muscle_groups_pkey on muscle_groups mg_1  (cost=0.15..8.17 rows=1 width=40) (actual time=0.000..0.000 rows=1.00 loops=50)
-                                  Index Cond: (id = emg_1.muscle_group_id)
+                            ->  Index Scan using muscle_groups_pkey on muscle_groups mg  (cost=0.15..8.17 rows=1 width=40) (actual time=0.000..0.000 rows=1.00 loops=50)
+                                  Index Cond: (id = emg.muscle_group_id)
                                   Index Searches: 50
                                   Buffers: shared hit=100
-Planning:
-  Buffers: shared hit=4
-Planning Time: 0.202 ms
-Execution Time: 0.245 ms
+Planning Time: 0.096 ms
+Execution Time: 0.241 ms
 ```
 
 ### H8: Sets for a page of 100 entries
 
 ```text
-Index Scan using workout_sets_entry_id_set_index_key on workout_sets  (cost=0.42..1090.59 rows=378 width=42) (actual time=0.016..0.084 rows=364.00 loops=1)
+Index Scan using workout_sets_entry_id_set_index_key on workout_sets  (cost=0.42..1090.59 rows=378 width=42) (actual time=0.014..0.077 rows=364.00 loops=1)
   Index Cond: (entry_id = ANY ('{01a11b79-48da-7b83-bada-b627b82e01a1,01a11b79-48e5-703c-8c9d-615df07432f2,01a11b79-48d8-7e3d-94e2-2885408f3f73,01a11b79-48df-74cc-9977-7bee6df70562,01a11b79-48d8-74f1-b93b-92c17fa85d2f,01a11b79-48d5-73a5-8b0b-a0011b934905,01a11b79-48e5-701a-8f6b-221e4da64288,01a11b79-48da-70b9-b3cb-5f219b3605f8,01a11b79-48e6-7e29-8756-2a9b994e2403,01a11b79-48dd-77bb-babd-f03db0ed828d,01a11b79-48dd-7f94-8b94-b97f78d4aa6d,01a11b79-48e0-7712-bd4f-12fc3737798b,01a11b79-48d8-74c2-9a95-3ccfd471a0e1,01a11b79-48d4-7afd-8c32-6973304106f3,01a11b79-48e4-762d-b85d-9eb1c4e4b7b4,01a11b79-48d4-7ac9-b66d-7d169948fe6e,01a11b79-48e4-760c-aa44-7271955d3b6b,01a11b79-48dc-7343-8598-52fcd5720849,01a11b79-48d6-7857-a488-5679817d3239,01a11b79-48d8-7499-b5cc-957605e3942b,01a11b79-48e4-75eb-8ef6-5983521b0885,01a11b79-48dd-7f72-8c82-fb950bf3d3b2,01a11b79-48d7-7183-8252-6140dd027f6a,01a11b79-48df-7d4f-a1ff-23c921a91502,01a11b79-48da-7097-bbbc-44954c320401,01a11b79-48e2-7bba-922d-b1cb31e299fd,01a11b79-48e6-75a6-8d32-a24a3f95af5f,01a11b79-48e4-7fec-87e4-7e93cba808dc,01a11b79-48d6-782b-ba92-b8237b270b9b,01a11b79-48d9-77bc-b333-06c3d939f388,01a11b79-48d8-7e1a-a8fd-6cba75ad643f,01a11b79-48d8-7df1-8438-88b973ef5807,01a11b79-48da-7b62-94d2-405eb97920ef,01a11b79-48db-792b-b194-976623a1383e,01a11b79-48e3-7cf5-b9e1-9f3b352ac424,01a11b79-48d8-7460-8826-d9e20d70104b,01a11b79-48e1-7839-b5c0-97f90f97d306,01a11b79-48e0-76f2-9c5b-fa164cc83c0e,01a11b79-48d9-7789-8fbb-9de2e241df95,01a11b79-48dc-7d8a-85ec-ba839230ca55,01a11b79-48d8-7dc9-be49-0804812252b5,01a11b79-48d7-7a88-a831-d81ed2fef0d1,01a11b79-48db-7908-b6ce-e62c4ab073b4,01a11b79-48e3-74b4-a590-b8488f874449,01a11b79-48e4-7fc9-b817-160ca64a935a,01a11b79-48df-7d2c-889a-201e162327ca,01a11b79-48da-7076-8b71-f99e9ef2c824,01a11b79-48e1-7816-bf72-5f058d1f18c9,01a11b79-48e1-7082-b39a-80157b3956e6,01a11b79-48d6-77e5-b589-5c30ae500f9b,01a11b79-48da-7b26-b5eb-b2d04736ac92,01a11b79-48d6-77c3-b8b9-5741598ba30c,01a11b79-48e3-748e-a41c-976057c825bb,01a11b79-48d4-7aa5-b41c-f81a35caf052,01a11b79-48e3-746d-a9c0-7e590b78c7d9,01a11b79-48e4-75c9-adb5-c199e5e943c8,01a11b79-48d7-7162-876a-0e6faecf73a2,01a11b79-48e1-7062-b173-3e9a5cc6f3fd,01a11b79-48e2-7159-bbc9-bd49712aa22c,01a11b79-48e0-76d2-ad5f-6bf49030714c,01a11b79-48e5-7ae5-a7b4-a7dfff2fe40c,01a11b79-48df-74aa-a53f-3ede27028b18,01a11b79-48db-78db-9d95-f7add1af31a7,01a11b79-48d5-737f-a75c-38ce90d6bd39,01a11b79-48d5-7e84-bf5b-3462fbf3cc6d,01a11b79-48d4-7a81-9462-0d1bfd060b10,01a11b79-48e6-7534-94f5-9e00924ad4ba,01a11b79-48e4-75a1-a7b4-c2073850fe81,01a11b79-48d4-7a46-b03f-5ac743d41d2d,01a11b79-48da-7054-a730-bdf5680ac053,01a11b79-48d5-7e62-9d30-3d5628021d0f,01a11b79-48dd-7f49-929b-33097c4807b0,01a11b79-48da-7033-bdd6-a671080032f2,01a11b79-48e0-769f-8bce-c7ba43e3f1f1,01a11b79-48e3-7cd5-a690-942110f0fcee,01a11b79-48dc-7d5e-a016-47b0971576cf,01a11b79-48e4-7fa7-9cec-fa3b2e8aab5e,01a11b79-48e2-7b98-9f94-3226b33db5af,01a11b79-48df-7d0b-8694-b1dd3a3cc99b,01a11b79-48e5-7ac3-92be-e4a11457d394,01a11b79-48d8-7da8-8904-a3d7224023d1,01a11b79-48d5-7340-9804-a688d076f679,01a11b79-48d5-7e40-98bb-1bc4934b82fe,01a11b79-48e1-77f3-9b6c-bdd7e3fc5ce4,01a11b79-48df-7489-8eb7-599237dd603b,01a11b79-48db-78b2-a1e4-21c86bea64e3,01a11b79-48de-7859-8a4f-1a3f81c1f4b4,01a11b79-48d7-7a66-8cb9-3da799b5da20,01a11b79-48e1-77bc-8354-020b57453e9b,01a11b79-48e1-7041-89a1-b09c782e0d10,01a11b79-48e4-757f-bc4b-a35bd63aeb99,01a11b79-48dc-7322-8835-e8487dc08d5c,01a11b79-48d8-7d87-96a6-d602802ccd4e,01a11b79-48dd-7f06-bbdb-43445772e2db,01a11b79-48d8-73fe-8b60-438b1d30c416,01a11b79-48d7-7a46-9fbf-2a1aba5fb640,01a11b79-48d7-7a26-94cf-ff6a2dea8cb9,01a11b79-48e3-7cb5-b748-7bd2600f78c1,01a11b79-48db-7890-83a9-dbf161012463,01a11b79-48d8-73da-bb25-d2f2e614a463}'::uuid[]))
   Index Searches: 18
   Buffers: shared hit=169
-Planning Time: 0.029 ms
-Execution Time: 0.095 ms
+Planning Time: 0.026 ms
+Execution Time: 0.087 ms
 ```
 
 ### W1: Worst case: exercise name matching nothing
@@ -389,37 +402,12 @@ Execution Time: 0.095 ms
 API: `GET /api/v1/users/perf-user/workouts?limit=20&exercise=zzzz`
 
 ```text
-Limit  (cost=0.57..769.47 rows=21 width=136) (actual time=13.767..13.769 rows=0.00 loops=1)
-  Buffers: shared hit=49810
-  ->  Nested Loop  (cost=0.57..15671.36 rows=428 width=136) (actual time=13.767..13.768 rows=0.00 loops=1)
-        Buffers: shared hit=49810
-        ->  Index Scan using workout_entries_user_performed_idx on workout_entries e  (cost=0.41..6642.46 rows=49944 width=44) (actual time=0.005..7.265 rows=50000.00 loops=1)
-              Index Cond: (user_id = 'perf-user'::text)
-              Index Searches: 1
-              Buffers: shared hit=49748
-        ->  Memoize  (cost=0.16..0.18 rows=1 width=48) (actual time=0.000..0.000 rows=0.00 loops=50000)
-              Cache Key: e.exercise_id
-              Cache Mode: logical
-              Hits: 49969  Misses: 31  Evictions: 0  Overflows: 0  Memory Usage: 3kB
-              Buffers: shared hit=62
-              ->  Index Scan using exercises_pkey on exercises  (cost=0.15..0.17 rows=1 width=48) (actual time=0.001..0.001 rows=0.00 loops=31)
-                    Index Cond: (id = e.exercise_id)
-                    Filter: (name_normalized ~~ '%zzzz%'::text)
-                    Rows Removed by Filter: 1
-                    Index Searches: 31
-                    Buffers: shared hit=62
-        SubPlan 1
-          ->  Aggregate  (cost=18.15..18.16 rows=1 width=32) (never executed)
-                ->  Sort  (cost=18.14..18.14 rows=2 width=36) (never executed)
-                      Sort Key: mg.sort_order
-                      ->  Nested Loop  (cost=0.15..18.13 rows=2 width=36) (never executed)
-                            ->  Seq Scan on exercise_muscle_groups emg  (cost=0.00..1.77 rows=2 width=4) (never executed)
-                                  Filter: (exercise_id = exercises.id)
-                            ->  Index Scan using muscle_groups_pkey on muscle_groups mg  (cost=0.15..8.17 rows=1 width=40) (never executed)
-                                  Index Cond: (id = emg.muscle_group_id)
-                                  Index Searches: 0
-Planning Time: 0.092 ms
-Execution Time: 13.791 ms
+Seq Scan on exercises ex  (cost=0.00..18.75 rows=6 width=16) (actual time=0.004..0.004 rows=0.00 loops=1)
+  Filter: (name_normalized ~~ '%zzzz%'::text)
+  Rows Removed by Filter: 31
+  Buffers: shared hit=1
+Planning Time: 0.009 ms
+Execution Time: 0.006 ms
 ```
 
 ### W2: Worst case: PRs for the oldest, lightest month (2021-10)
@@ -427,46 +415,46 @@ Execution Time: 13.791 ms
 API: `GET /api/v1/users/perf-user/records?exercise=deadlift&from=2021-10-01&to=2021-10-31`
 
 ```text
-Append  (cost=227.44..682.36 rows=3 width=114) (actual time=0.045..0.117 rows=3.00 loops=1)
+Append  (cost=227.44..682.36 rows=3 width=114) (actual time=0.079..0.164 rows=3.00 loops=1)
   Buffers: shared hit=81
-  ->  Subquery Scan on "*SELECT* 1_1"  (cost=227.44..227.45 rows=1 width=114) (actual time=0.045..0.045 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 1_1"  (cost=227.44..227.45 rows=1 width=114) (actual time=0.079..0.079 rows=1.00 loops=1)
         Buffers: shared hit=27
-        ->  Limit  (cost=227.44..227.44 rows=1 width=130) (actual time=0.044..0.045 rows=1.00 loops=1)
+        ->  Limit  (cost=227.44..227.44 rows=1 width=130) (actual time=0.078..0.079 rows=1.00 loops=1)
               Buffers: shared hit=27
-              ->  Sort  (cost=227.44..227.65 rows=86 width=130) (actual time=0.044..0.044 rows=1.00 loops=1)
+              ->  Sort  (cost=227.44..227.65 rows=86 width=130) (actual time=0.078..0.078 rows=1.00 loops=1)
                     Sort Key: s.weight_kg DESC, s.performed_at DESC, s.id DESC
                     Sort Method: top-N heapsort  Memory: 25kB
                     Buffers: shared hit=27
-                    ->  Index Scan using workout_sets_user_exercise_local_date_idx on workout_sets s  (cost=0.42..227.01 rows=86 width=130) (actual time=0.010..0.028 rows=99.00 loops=1)
+                    ->  Index Scan using workout_sets_user_exercise_local_date_idx on workout_sets s  (cost=0.42..227.01 rows=86 width=130) (actual time=0.012..0.054 rows=99.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid) AND (local_date >= '2021-10-01'::date) AND (local_date <= '2021-10-31'::date))
                           Index Searches: 1
                           Buffers: shared hit=27
-  ->  Subquery Scan on "*SELECT* 2"  (cost=227.44..227.45 rows=1 width=114) (actual time=0.034..0.034 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 2"  (cost=227.44..227.45 rows=1 width=114) (actual time=0.041..0.041 rows=1.00 loops=1)
         Buffers: shared hit=27
-        ->  Limit  (cost=227.44..227.44 rows=1 width=130) (actual time=0.034..0.034 rows=1.00 loops=1)
+        ->  Limit  (cost=227.44..227.44 rows=1 width=130) (actual time=0.041..0.041 rows=1.00 loops=1)
               Buffers: shared hit=27
-              ->  Sort  (cost=227.44..227.65 rows=86 width=130) (actual time=0.033..0.034 rows=1.00 loops=1)
+              ->  Sort  (cost=227.44..227.65 rows=86 width=130) (actual time=0.041..0.041 rows=1.00 loops=1)
                     Sort Key: s_1.volume_kg DESC, s_1.performed_at DESC, s_1.id DESC
                     Sort Method: top-N heapsort  Memory: 25kB
                     Buffers: shared hit=27
-                    ->  Index Scan using workout_sets_user_exercise_local_date_idx on workout_sets s_1  (cost=0.42..227.01 rows=86 width=130) (actual time=0.005..0.020 rows=99.00 loops=1)
+                    ->  Index Scan using workout_sets_user_exercise_local_date_idx on workout_sets s_1  (cost=0.42..227.01 rows=86 width=130) (actual time=0.011..0.026 rows=99.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid) AND (local_date >= '2021-10-01'::date) AND (local_date <= '2021-10-31'::date))
                           Index Searches: 1
                           Buffers: shared hit=27
-  ->  Subquery Scan on "*SELECT* 3"  (cost=227.44..227.45 rows=1 width=114) (actual time=0.037..0.037 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 3"  (cost=227.44..227.45 rows=1 width=114) (actual time=0.042..0.042 rows=1.00 loops=1)
         Buffers: shared hit=27
-        ->  Limit  (cost=227.44..227.44 rows=1 width=130) (actual time=0.037..0.037 rows=1.00 loops=1)
+        ->  Limit  (cost=227.44..227.44 rows=1 width=130) (actual time=0.042..0.042 rows=1.00 loops=1)
               Buffers: shared hit=27
-              ->  Sort  (cost=227.44..227.65 rows=86 width=130) (actual time=0.037..0.037 rows=1.00 loops=1)
+              ->  Sort  (cost=227.44..227.65 rows=86 width=130) (actual time=0.042..0.042 rows=1.00 loops=1)
                     Sort Key: s_2.e1rm_kg DESC, s_2.performed_at DESC, s_2.id DESC
                     Sort Method: top-N heapsort  Memory: 25kB
                     Buffers: shared hit=27
-                    ->  Index Scan using workout_sets_user_exercise_local_date_idx on workout_sets s_2  (cost=0.42..227.01 rows=86 width=130) (actual time=0.004..0.021 rows=99.00 loops=1)
+                    ->  Index Scan using workout_sets_user_exercise_local_date_idx on workout_sets s_2  (cost=0.42..227.01 rows=86 width=130) (actual time=0.006..0.022 rows=99.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid) AND (local_date >= '2021-10-01'::date) AND (local_date <= '2021-10-31'::date))
                           Index Searches: 1
                           Buffers: shared hit=27
-Planning Time: 0.135 ms
-Execution Time: 0.144 ms
+Planning Time: 0.131 ms
+Execution Time: 0.208 ms
 ```
 
 ### R1: PRs for deadlift, all time
@@ -474,7 +462,7 @@ Execution Time: 0.144 ms
 API: `GET /api/v1/users/perf-user/records?exercise=deadlift`
 
 ```text
-Append  (cost=82.76..107.48 rows=3 width=114) (actual time=0.012..0.041 rows=3.00 loops=1)
+Append  (cost=82.76..107.48 rows=3 width=114) (actual time=0.013..0.040 rows=3.00 loops=1)
   Buffers: shared hit=34
   ->  Subquery Scan on "*SELECT* 1_1"  (cost=82.76..84.49 rows=1 width=114) (actual time=0.012..0.013 rows=1.00 loops=1)
         Buffers: shared hit=6
@@ -489,34 +477,34 @@ Append  (cost=82.76..107.48 rows=3 width=114) (actual time=0.012..0.041 rows=3.0
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Index Searches: 1
                           Buffers: shared hit=6
-  ->  Subquery Scan on "*SELECT* 2"  (cost=10.65..12.40 rows=1 width=114) (actual time=0.015..0.015 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 2"  (cost=10.65..12.40 rows=1 width=114) (actual time=0.014..0.014 rows=1.00 loops=1)
         Buffers: shared hit=14
-        ->  Limit  (cost=10.65..12.39 rows=1 width=130) (actual time=0.015..0.015 rows=1.00 loops=1)
+        ->  Limit  (cost=10.65..12.39 rows=1 width=130) (actual time=0.014..0.014 rows=1.00 loops=1)
               Buffers: shared hit=14
-              ->  Incremental Sort  (cost=10.65..10340.32 rows=5934 width=130) (actual time=0.014..0.015 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=10.65..10340.32 rows=5934 width=130) (actual time=0.014..0.014 rows=1.00 loops=1)
                     Sort Key: s_1.volume_kg DESC, s_1.performed_at DESC, s_1.id DESC
                     Presorted Key: s_1.volume_kg
                     Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=14
-                    ->  Index Scan using workout_sets_pr_volume_idx on workout_sets s_1  (cost=0.42..10216.43 rows=5934 width=130) (actual time=0.006..0.010 rows=11.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_volume_idx on workout_sets s_1  (cost=0.42..10216.43 rows=5934 width=130) (actual time=0.005..0.009 rows=11.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Index Searches: 1
                           Buffers: shared hit=14
   ->  Subquery Scan on "*SELECT* 3"  (cost=8.83..10.59 rows=1 width=114) (actual time=0.013..0.013 rows=1.00 loops=1)
         Buffers: shared hit=14
-        ->  Limit  (cost=8.83..10.58 rows=1 width=130) (actual time=0.013..0.013 rows=1.00 loops=1)
+        ->  Limit  (cost=8.83..10.58 rows=1 width=130) (actual time=0.012..0.013 rows=1.00 loops=1)
               Buffers: shared hit=14
-              ->  Incremental Sort  (cost=8.83..10360.68 rows=5934 width=130) (actual time=0.013..0.013 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=8.83..10360.68 rows=5934 width=130) (actual time=0.012..0.012 rows=1.00 loops=1)
                     Sort Key: s_2.e1rm_kg DESC, s_2.performed_at DESC, s_2.id DESC
                     Presorted Key: s_2.e1rm_kg
                     Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=14
-                    ->  Index Scan using workout_sets_pr_e1rm_idx on workout_sets s_2  (cost=0.42..10232.43 rows=5934 width=130) (actual time=0.006..0.009 rows=11.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_e1rm_idx on workout_sets s_2  (cost=0.42..10232.43 rows=5934 width=130) (actual time=0.005..0.008 rows=11.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Index Searches: 1
                           Buffers: shared hit=14
-Planning Time: 0.099 ms
-Execution Time: 0.071 ms
+Planning Time: 0.089 ms
+Execution Time: 0.079 ms
 ```
 
 ### R2: PRs for deadlift, one month
@@ -524,55 +512,55 @@ Execution Time: 0.071 ms
 API: `GET /api/v1/users/perf-user/records?exercise=deadlift&from=2026-09-01&to=2026-09-30`
 
 ```text
-Append  (cost=114.82..449.39 rows=3 width=114) (actual time=0.077..0.118 rows=3.00 loops=1)
+Append  (cost=114.82..449.39 rows=3 width=114) (actual time=0.056..0.085 rows=3.00 loops=1)
   Buffers: shared hit=121
-  ->  Subquery Scan on "*SELECT* 1_1"  (cost=114.82..178.98 rows=1 width=114) (actual time=0.077..0.077 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 1_1"  (cost=114.82..178.98 rows=1 width=114) (actual time=0.056..0.056 rows=1.00 loops=1)
         Buffers: shared hit=93
-        ->  Limit  (cost=114.82..178.97 rows=1 width=130) (actual time=0.076..0.077 rows=1.00 loops=1)
+        ->  Limit  (cost=114.82..178.97 rows=1 width=130) (actual time=0.055..0.055 rows=1.00 loops=1)
               Buffers: shared hit=93
-              ->  Incremental Sort  (cost=114.82..10185.90 rows=157 width=130) (actual time=0.076..0.076 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=114.82..10185.90 rows=157 width=130) (actual time=0.055..0.055 rows=1.00 loops=1)
                     Sort Key: s.weight_kg DESC, s.performed_at DESC, s.id DESC
                     Presorted Key: s.weight_kg
                     Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=93
-                    ->  Index Scan using workout_sets_pr_weight_idx on workout_sets s  (cost=0.42..10181.22 rows=157 width=130) (actual time=0.011..0.062 rows=32.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_weight_idx on workout_sets s  (cost=0.42..10181.22 rows=157 width=130) (actual time=0.007..0.044 rows=32.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Filter: ((local_date >= '2026-09-01'::date) AND (local_date <= '2026-09-30'::date))
                           Rows Removed by Filter: 91
                           Index Searches: 1
                           Buffers: shared hit=93
-  ->  Subquery Scan on "*SELECT* 2"  (cost=70.89..135.57 rows=1 width=114) (actual time=0.016..0.016 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 2"  (cost=70.89..135.57 rows=1 width=114) (actual time=0.013..0.013 rows=1.00 loops=1)
         Buffers: shared hit=14
-        ->  Limit  (cost=70.89..135.56 rows=1 width=130) (actual time=0.016..0.016 rows=1.00 loops=1)
+        ->  Limit  (cost=70.89..135.56 rows=1 width=130) (actual time=0.013..0.013 rows=1.00 loops=1)
               Buffers: shared hit=14
-              ->  Incremental Sort  (cost=70.89..10223.86 rows=157 width=130) (actual time=0.015..0.015 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=70.89..10223.86 rows=157 width=130) (actual time=0.013..0.013 rows=1.00 loops=1)
                     Sort Key: s_1.volume_kg DESC, s_1.performed_at DESC, s_1.id DESC
                     Presorted Key: s_1.volume_kg
                     Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=14
-                    ->  Index Scan using workout_sets_pr_volume_idx on workout_sets s_1  (cost=0.42..10217.22 rows=157 width=130) (actual time=0.009..0.012 rows=5.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_volume_idx on workout_sets s_1  (cost=0.42..10217.22 rows=157 width=130) (actual time=0.006..0.009 rows=5.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Filter: ((local_date >= '2026-09-01'::date) AND (local_date <= '2026-09-30'::date))
                           Rows Removed by Filter: 6
                           Index Searches: 1
                           Buffers: shared hit=14
-  ->  Subquery Scan on "*SELECT* 3"  (cost=70.04..134.83 rows=1 width=114) (actual time=0.024..0.024 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 3"  (cost=70.04..134.83 rows=1 width=114) (actual time=0.015..0.015 rows=1.00 loops=1)
         Buffers: shared hit=14
-        ->  Limit  (cost=70.04..134.82 rows=1 width=130) (actual time=0.023..0.023 rows=1.00 loops=1)
+        ->  Limit  (cost=70.04..134.82 rows=1 width=130) (actual time=0.015..0.015 rows=1.00 loops=1)
               Buffers: shared hit=14
-              ->  Incremental Sort  (cost=70.04..10239.93 rows=157 width=130) (actual time=0.023..0.023 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=70.04..10239.93 rows=157 width=130) (actual time=0.015..0.015 rows=1.00 loops=1)
                     Sort Key: s_2.e1rm_kg DESC, s_2.performed_at DESC, s_2.id DESC
                     Presorted Key: s_2.e1rm_kg
                     Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=14
-                    ->  Index Scan using workout_sets_pr_e1rm_idx on workout_sets s_2  (cost=0.42..10233.22 rows=157 width=130) (actual time=0.016..0.019 rows=5.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_e1rm_idx on workout_sets s_2  (cost=0.42..10233.22 rows=157 width=130) (actual time=0.008..0.010 rows=5.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Filter: ((local_date >= '2026-09-01'::date) AND (local_date <= '2026-09-30'::date))
                           Rows Removed by Filter: 6
                           Index Searches: 1
                           Buffers: shared hit=14
-Planning Time: 0.161 ms
-Execution Time: 0.162 ms
+Planning Time: 0.130 ms
+Execution Time: 0.123 ms
 ```
 
 ### R3: PRs for deadlift, month vs previous month
@@ -580,105 +568,105 @@ Execution Time: 0.162 ms
 API: `GET /api/v1/users/perf-user/records?exercise=deadlift&from=2026-09-01&to=2026-09-30&compareFrom=2026-08-01&compareTo=2026-08-31`
 
 ```text
-Append  (cost=114.82..449.39 rows=3 width=114) (actual time=0.054..0.073 rows=3.00 loops=1)
+Append  (cost=114.82..449.39 rows=3 width=114) (actual time=0.078..0.117 rows=3.00 loops=1)
   Buffers: shared hit=121
-  ->  Subquery Scan on "*SELECT* 1_1"  (cost=114.82..178.98 rows=1 width=114) (actual time=0.054..0.054 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 1_1"  (cost=114.82..178.98 rows=1 width=114) (actual time=0.078..0.078 rows=1.00 loops=1)
         Buffers: shared hit=93
-        ->  Limit  (cost=114.82..178.97 rows=1 width=130) (actual time=0.053..0.053 rows=1.00 loops=1)
+        ->  Limit  (cost=114.82..178.97 rows=1 width=130) (actual time=0.077..0.077 rows=1.00 loops=1)
               Buffers: shared hit=93
-              ->  Incremental Sort  (cost=114.82..10185.90 rows=157 width=130) (actual time=0.053..0.053 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=114.82..10185.90 rows=157 width=130) (actual time=0.077..0.077 rows=1.00 loops=1)
                     Sort Key: s.weight_kg DESC, s.performed_at DESC, s.id DESC
                     Presorted Key: s.weight_kg
                     Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=93
-                    ->  Index Scan using workout_sets_pr_weight_idx on workout_sets s  (cost=0.42..10181.22 rows=157 width=130) (actual time=0.007..0.045 rows=32.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_weight_idx on workout_sets s  (cost=0.42..10181.22 rows=157 width=130) (actual time=0.012..0.060 rows=32.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Filter: ((local_date >= '2026-09-01'::date) AND (local_date <= '2026-09-30'::date))
                           Rows Removed by Filter: 91
                           Index Searches: 1
                           Buffers: shared hit=93
-  ->  Subquery Scan on "*SELECT* 2"  (cost=70.89..135.57 rows=1 width=114) (actual time=0.009..0.010 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 2"  (cost=70.89..135.57 rows=1 width=114) (actual time=0.019..0.019 rows=1.00 loops=1)
         Buffers: shared hit=14
-        ->  Limit  (cost=70.89..135.56 rows=1 width=130) (actual time=0.009..0.009 rows=1.00 loops=1)
+        ->  Limit  (cost=70.89..135.56 rows=1 width=130) (actual time=0.018..0.019 rows=1.00 loops=1)
               Buffers: shared hit=14
-              ->  Incremental Sort  (cost=70.89..10223.86 rows=157 width=130) (actual time=0.009..0.009 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=70.89..10223.86 rows=157 width=130) (actual time=0.018..0.018 rows=1.00 loops=1)
                     Sort Key: s_1.volume_kg DESC, s_1.performed_at DESC, s_1.id DESC
                     Presorted Key: s_1.volume_kg
                     Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=14
-                    ->  Index Scan using workout_sets_pr_volume_idx on workout_sets s_1  (cost=0.42..10217.22 rows=157 width=130) (actual time=0.005..0.007 rows=5.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_volume_idx on workout_sets s_1  (cost=0.42..10217.22 rows=157 width=130) (actual time=0.009..0.013 rows=5.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Filter: ((local_date >= '2026-09-01'::date) AND (local_date <= '2026-09-30'::date))
                           Rows Removed by Filter: 6
                           Index Searches: 1
                           Buffers: shared hit=14
-  ->  Subquery Scan on "*SELECT* 3"  (cost=70.04..134.83 rows=1 width=114) (actual time=0.009..0.009 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 3"  (cost=70.04..134.83 rows=1 width=114) (actual time=0.018..0.019 rows=1.00 loops=1)
         Buffers: shared hit=14
-        ->  Limit  (cost=70.04..134.82 rows=1 width=130) (actual time=0.009..0.009 rows=1.00 loops=1)
+        ->  Limit  (cost=70.04..134.82 rows=1 width=130) (actual time=0.018..0.018 rows=1.00 loops=1)
               Buffers: shared hit=14
-              ->  Incremental Sort  (cost=70.04..10239.93 rows=157 width=130) (actual time=0.009..0.009 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=70.04..10239.93 rows=157 width=130) (actual time=0.018..0.018 rows=1.00 loops=1)
                     Sort Key: s_2.e1rm_kg DESC, s_2.performed_at DESC, s_2.id DESC
                     Presorted Key: s_2.e1rm_kg
                     Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=14
-                    ->  Index Scan using workout_sets_pr_e1rm_idx on workout_sets s_2  (cost=0.42..10233.22 rows=157 width=130) (actual time=0.005..0.007 rows=5.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_e1rm_idx on workout_sets s_2  (cost=0.42..10233.22 rows=157 width=130) (actual time=0.009..0.013 rows=5.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Filter: ((local_date >= '2026-09-01'::date) AND (local_date <= '2026-09-30'::date))
                           Rows Removed by Filter: 6
                           Index Searches: 1
                           Buffers: shared hit=14
-Planning Time: 0.093 ms
-Execution Time: 0.109 ms
+Planning Time: 0.207 ms
+Execution Time: 0.172 ms
 ```
 
 ```text
-Append  (cost=109.90..417.68 rows=3 width=114) (actual time=0.013..0.033 rows=3.00 loops=1)
+Append  (cost=109.90..417.68 rows=3 width=114) (actual time=0.026..0.065 rows=3.00 loops=1)
   Buffers: shared hit=56
-  ->  Subquery Scan on "*SELECT* 1_1"  (cost=109.90..168.84 rows=1 width=114) (actual time=0.013..0.014 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 1_1"  (cost=109.90..168.84 rows=1 width=114) (actual time=0.025..0.026 rows=1.00 loops=1)
         Buffers: shared hit=22
-        ->  Limit  (cost=109.90..168.83 rows=1 width=130) (actual time=0.013..0.013 rows=1.00 loops=1)
+        ->  Limit  (cost=109.90..168.83 rows=1 width=130) (actual time=0.025..0.025 rows=1.00 loops=1)
               Buffers: shared hit=22
-              ->  Incremental Sort  (cost=109.90..10186.25 rows=171 width=130) (actual time=0.013..0.013 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=109.90..10186.25 rows=171 width=130) (actual time=0.025..0.025 rows=1.00 loops=1)
                     Sort Key: s.weight_kg DESC, s.performed_at DESC, s.id DESC
                     Presorted Key: s.weight_kg
                     Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=22
-                    ->  Index Scan using workout_sets_pr_weight_idx on workout_sets s  (cost=0.42..10181.29 rows=171 width=130) (actual time=0.005..0.011 rows=2.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_weight_idx on workout_sets s  (cost=0.42..10181.29 rows=171 width=130) (actual time=0.008..0.020 rows=2.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Filter: ((local_date >= '2026-08-01'::date) AND (local_date <= '2026-08-31'::date))
                           Rows Removed by Filter: 31
                           Index Searches: 1
                           Buffers: shared hit=22
-  ->  Subquery Scan on "*SELECT* 2"  (cost=65.51..124.92 rows=1 width=114) (actual time=0.010..0.010 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 2"  (cost=65.51..124.92 rows=1 width=114) (actual time=0.019..0.020 rows=1.00 loops=1)
         Buffers: shared hit=17
-        ->  Limit  (cost=65.51..124.91 rows=1 width=130) (actual time=0.010..0.010 rows=1.00 loops=1)
+        ->  Limit  (cost=65.51..124.91 rows=1 width=130) (actual time=0.019..0.019 rows=1.00 loops=1)
               Buffers: shared hit=17
-              ->  Incremental Sort  (cost=65.51..10224.49 rows=171 width=130) (actual time=0.010..0.010 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=65.51..10224.49 rows=171 width=130) (actual time=0.019..0.019 rows=1.00 loops=1)
                     Sort Key: s_1.volume_kg DESC, s_1.performed_at DESC, s_1.id DESC
                     Presorted Key: s_1.volume_kg
                     Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=17
-                    ->  Index Scan using workout_sets_pr_volume_idx on workout_sets s_1  (cost=0.42..10217.29 rows=171 width=130) (actual time=0.006..0.008 rows=5.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_volume_idx on workout_sets s_1  (cost=0.42..10217.29 rows=171 width=130) (actual time=0.010..0.014 rows=5.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Filter: ((local_date >= '2026-08-01'::date) AND (local_date <= '2026-08-31'::date))
                           Rows Removed by Filter: 9
                           Index Searches: 1
                           Buffers: shared hit=17
-  ->  Subquery Scan on "*SELECT* 3"  (cost=64.39..123.91 rows=1 width=114) (actual time=0.009..0.009 rows=1.00 loops=1)
+  ->  Subquery Scan on "*SELECT* 3"  (cost=64.39..123.91 rows=1 width=114) (actual time=0.019..0.019 rows=1.00 loops=1)
         Buffers: shared hit=17
-        ->  Limit  (cost=64.39..123.90 rows=1 width=130) (actual time=0.009..0.009 rows=1.00 loops=1)
+        ->  Limit  (cost=64.39..123.90 rows=1 width=130) (actual time=0.018..0.019 rows=1.00 loops=1)
               Buffers: shared hit=17
-              ->  Incremental Sort  (cost=64.39..10240.60 rows=171 width=130) (actual time=0.009..0.009 rows=1.00 loops=1)
+              ->  Incremental Sort  (cost=64.39..10240.60 rows=171 width=130) (actual time=0.018..0.019 rows=1.00 loops=1)
                     Sort Key: s_2.e1rm_kg DESC, s_2.performed_at DESC, s_2.id DESC
                     Presorted Key: s_2.e1rm_kg
                     Full-sort Groups: 1  Sort Method: top-N heapsort  Average Memory: 25kB  Peak Memory: 25kB
                     Buffers: shared hit=17
-                    ->  Index Scan using workout_sets_pr_e1rm_idx on workout_sets s_2  (cost=0.42..10233.29 rows=171 width=130) (actual time=0.005..0.007 rows=5.00 loops=1)
+                    ->  Index Scan using workout_sets_pr_e1rm_idx on workout_sets s_2  (cost=0.42..10233.29 rows=171 width=130) (actual time=0.010..0.013 rows=5.00 loops=1)
                           Index Cond: ((user_id = 'perf-user'::text) AND (exercise_id = 'b6fe65d3-d518-4282-9229-76d01be06230'::uuid))
                           Filter: ((local_date >= '2026-08-01'::date) AND (local_date <= '2026-08-31'::date))
                           Rows Removed by Filter: 9
                           Index Searches: 1
                           Buffers: shared hit=17
-Planning Time: 0.087 ms
-Execution Time: 0.066 ms
+Planning Time: 0.156 ms
+Execution Time: 0.109 ms
 ```

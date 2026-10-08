@@ -128,16 +128,11 @@ export class WorkoutsRepository {
   async findHistoryPage(params: HistoryPageParams): Promise<HistoryEntryRow[]> {
     const conditions: Prisma.Sql[] = [Prisma.sql`e.user_id = ${params.userId}`];
 
-    if (params.exerciseSearch) {
-      const pattern = `%${escapeLike(params.exerciseSearch)}%`;
-      conditions.push(Prisma.sql`e.exercise_id IN (
-        SELECT id FROM exercises WHERE name_normalized LIKE ${pattern} ESCAPE '\\')`);
-    }
-    if (params.muscleGroup) {
-      conditions.push(Prisma.sql`e.exercise_id IN (
-        SELECT emg.exercise_id FROM exercise_muscle_groups emg
-        JOIN muscle_groups mg ON mg.id = emg.muscle_group_id
-        WHERE mg.slug = ${params.muscleGroup})`);
+    if (params.exerciseIds) {
+      // Resolved from the catalog beforehand (see ExercisesRepository.findIdsForFilter).
+      conditions.push(
+        Prisma.sql`e.exercise_id = ANY(${params.exerciseIds}::uuid[])`,
+      );
     }
     if (params.from) {
       // local_date gives the exact calendar match; the widened performed_at bound
@@ -198,16 +193,11 @@ function shiftHours(date: string, hours: number): string {
   ).toISOString();
 }
 
-/** Escapes LIKE wildcards so user input matches literally. */
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
-}
-
 export interface HistoryPageParams {
   tx: Prisma.TransactionClient;
   userId: string;
-  exerciseSearch?: string;
-  muscleGroup?: string;
+  /** Restricts to these exercises (an empty list matches nothing). */
+  exerciseIds?: string[];
   from?: string;
   to?: string;
   after?: { performedAt: Date; id: string };

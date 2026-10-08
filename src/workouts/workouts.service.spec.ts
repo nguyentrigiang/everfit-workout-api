@@ -7,7 +7,8 @@ import type {
   StoredEntryRow,
   WorkoutsRepository,
 } from './workouts.repository.js';
-import { WorkoutsService } from './workouts.service.js';
+import { ListWorkoutsQuery } from './dto/list-workouts.query.js';
+import { NO_WORKOUTS_MESSAGE, WorkoutsService } from './workouts.service.js';
 
 const SQUAT = { id: 'ex-squat', name: 'Squat' };
 const BENCH = { id: 'ex-bench', name: 'Bench Press' };
@@ -44,6 +45,8 @@ function setup(inserted: StoredEntryRow[], existing: StoredEntryRow[]) {
     insertEntries: vi.fn().mockResolvedValue(inserted),
     findByNaturalKeys: vi.fn().mockResolvedValue(existing),
     insertSets: vi.fn().mockResolvedValue(undefined),
+    findHistoryPage: vi.fn().mockResolvedValue([]),
+    findSetsForEntries: vi.fn().mockResolvedValue([]),
   };
   const exercises = {
     resolveByNames: vi.fn().mockResolvedValue(
@@ -52,6 +55,8 @@ function setup(inserted: StoredEntryRow[], existing: StoredEntryRow[]) {
         ['bench press', BENCH],
       ]),
     ),
+    findIdsForFilter: vi.fn().mockResolvedValue([]),
+    listMuscleGroupSlugs: vi.fn().mockResolvedValue(['chest', 'core']),
   };
   const prisma = {
     $transaction: vi.fn((fn: (tx: unknown) => unknown) => fn({})),
@@ -62,7 +67,7 @@ function setup(inserted: StoredEntryRow[], existing: StoredEntryRow[]) {
     workouts as unknown as WorkoutsRepository,
     new UnitConverter(DEFAULT_UNIT_REGISTRY),
   );
-  return { service, workouts };
+  return { service, workouts, exercises };
 }
 
 describe('WorkoutsService.logWorkouts', () => {
@@ -95,5 +100,52 @@ describe('WorkoutsService.logWorkouts', () => {
       'neither inserted nor found',
     );
     expect(workouts.insertSets).not.toHaveBeenCalled();
+  });
+});
+
+describe('WorkoutsService.listHistory', () => {
+  const query = (extra: Partial<ListWorkoutsQuery>) =>
+    Object.assign(new ListWorkoutsQuery(), { limit: 20, unit: 'kg' }, extra);
+
+  it('returns an empty page without reading history when no exercise matches the filter', async () => {
+    const { service, workouts, exercises } = setup([], []);
+
+    const page = await service.listHistory(
+      'user-1',
+      query({ exercise: 'zzzz', muscleGroup: 'core' }),
+    );
+
+    expect(exercises.findIdsForFilter).toHaveBeenCalledWith(expect.anything(), {
+      nameContains: 'zzzz',
+      muscleGroup: 'core',
+    });
+    expect(workouts.findHistoryPage).not.toHaveBeenCalled();
+    expect(page).toEqual({
+      data: [],
+      pagination: { limit: 20, hasMore: false, nextCursor: null },
+      message: NO_WORKOUTS_MESSAGE,
+    });
+  });
+
+  it('reads history only for the exercises that match the filter', async () => {
+    const { service, workouts, exercises } = setup([], []);
+    exercises.findIdsForFilter.mockResolvedValue([SQUAT.id]);
+
+    await service.listHistory('user-1', query({ exercise: 'squat' }));
+
+    expect(workouts.findHistoryPage).toHaveBeenCalledWith(
+      expect.objectContaining({ exerciseIds: [SQUAT.id] }),
+    );
+  });
+
+  it('does not resolve exercise ids when no exercise filter is given', async () => {
+    const { service, workouts, exercises } = setup([], []);
+
+    await service.listHistory('user-1', query({}));
+
+    expect(exercises.findIdsForFilter).not.toHaveBeenCalled();
+    expect(workouts.findHistoryPage).toHaveBeenCalledWith(
+      expect.objectContaining({ exerciseIds: undefined }),
+    );
   });
 });
