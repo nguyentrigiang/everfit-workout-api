@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { PrismaRepository } from '../../../infrastructure/database/prisma/prisma-repository.js';
+import type { Transaction } from '../../../shared/database/transaction.js';
 import { Prisma } from '../../../generated/prisma/client.js';
 
 export interface NewEntryRow {
@@ -46,17 +48,17 @@ const toStored = (r: EntryRecord): StoredEntryRow => ({
 
 /** Raw SQL for bulk workout writes. One statement per table, bind parameters only. */
 @Injectable()
-export class WorkoutRepository {
+export class WorkoutRepository extends PrismaRepository {
   /**
    * Inserts entries; rows that hit the natural key (user, exercise, performed_at)
    * are skipped by the unique index and are not returned (idempotent, race-safe).
    */
   async insertEntries(
-    tx: Prisma.TransactionClient,
     userId: string,
     rows: NewEntryRow[],
+    tx: Transaction,
   ): Promise<StoredEntryRow[]> {
-    const created = await tx.$queryRaw<EntryRecord[]>`
+    const created = await this.db(tx).$queryRaw<EntryRecord[]>`
       INSERT INTO workout_entries (user_id, exercise_id, performed_at, local_date, utc_offset_minutes)
       SELECT ${userId}, u.exercise_id, u.performed_at, u.local_date, u.utc_offset_minutes
       FROM unnest(
@@ -75,12 +77,12 @@ export class WorkoutRepository {
 
   /** Looks up existing entries (with their stored set count) by natural key, to report duplicates. */
   async findByNaturalKeys(
-    tx: Prisma.TransactionClient,
     userId: string,
     keys: { exerciseId: string; performedAt: Date }[],
+    tx?: Transaction,
   ): Promise<StoredEntryRow[]> {
     if (keys.length === 0) return [];
-    const rows = await tx.$queryRaw<EntryRecord[]>`
+    const rows = await this.db(tx).$queryRaw<EntryRecord[]>`
       SELECT e.id, e.exercise_id, e.performed_at, e.local_date::text AS local_date,
              (SELECT count(*) FROM workout_sets s WHERE s.entry_id = e.id)::int AS set_count
       FROM workout_entries e
@@ -97,12 +99,9 @@ export class WorkoutRepository {
    * Inserts sets. user_id, exercise_id, performed_at and local_date are copied from the
    * parent entry row in SQL, so the denormalized columns cannot disagree with it.
    */
-  async insertSets(
-    tx: Prisma.TransactionClient,
-    sets: NewSetRow[],
-  ): Promise<void> {
+  async insertSets(sets: NewSetRow[], tx: Transaction): Promise<void> {
     if (sets.length === 0) return;
-    await tx.$executeRaw`
+    await this.db(tx).$executeRaw`
       INSERT INTO workout_sets (entry_id, set_index, reps, weight, unit, weight_kg, volume_kg, e1rm_kg,
                                 user_id, exercise_id, performed_at, local_date)
       SELECT s.entry_id, s.set_index, s.reps, s.weight, s.unit, s.weight_kg, s.volume_kg, s.e1rm_kg,
@@ -125,7 +124,10 @@ export class WorkoutRepository {
    * Filters are composed with Prisma.sql fragments (bind parameters, no string concat).
    * Fetches limit + 1 rows so the caller can tell whether another page exists.
    */
-  async findHistoryPage(params: HistoryPageParams): Promise<HistoryEntryRow[]> {
+  async findHistoryPage(
+    params: HistoryPageParams,
+    tx?: Transaction,
+  ): Promise<HistoryEntryRow[]> {
     const conditions: Prisma.Sql[] = [Prisma.sql`e.user_id = ${params.userId}`];
 
     if (params.exerciseIds) {
@@ -154,7 +156,7 @@ export class WorkoutRepository {
       );
     }
 
-    return params.tx.$queryRaw<HistoryEntryRow[]>`
+    return this.db(tx).$queryRaw<HistoryEntryRow[]>`
       SELECT e.id, e.performed_at, e.local_date::text AS local_date,
              ex.id AS exercise_id, ex.name AS exercise_name,
              COALESCE((
@@ -172,11 +174,11 @@ export class WorkoutRepository {
 
   /** Sets for a page of entries in one query (no N+1). */
   async findSetsForEntries(
-    tx: Prisma.TransactionClient,
     entryIds: string[],
+    tx?: Transaction,
   ): Promise<HistorySetRow[]> {
     if (entryIds.length === 0) return [];
-    return tx.$queryRaw<HistorySetRow[]>`
+    return this.db(tx).$queryRaw<HistorySetRow[]>`
       SELECT entry_id, set_index, reps, weight_kg, volume_kg, e1rm_kg
       FROM workout_sets
       WHERE entry_id = ANY(${entryIds}::uuid[])
@@ -194,7 +196,6 @@ function shiftHours(date: string, hours: number): string {
 }
 
 export interface HistoryPageParams {
-  tx: Prisma.TransactionClient;
   userId: string;
   /** Restricts to these exercises (an empty list matches nothing). */
   exerciseIds?: string[];

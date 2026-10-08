@@ -18,7 +18,7 @@ import {
 import {
   IsNotInFuture,
   IsOffsetDateTime,
-} from '../../domain/time/offset-datetime.js';
+} from '../validators/date.validators.js';
 import { SUPPORTED_UNITS } from '../../domain/units/unit-registry.js';
 
 export const MAX_ENTRIES_PER_REQUEST = 100;

@@ -5,11 +5,11 @@ import {
 } from '../../../shared/errors/app.exception.js';
 import { ErrorCode } from '../../../shared/errors/error-code.js';
 import { toApiNumber } from '../domain/decimal.js';
-import { decodeCursor, encodeCursor } from '../domain/history-cursor.js';
+import { decodeCursor, encodeCursor } from './history-cursor.js';
 import { parseOffsetDateTime } from '../domain/time/offset-datetime.js';
 import { normalizeExerciseName } from '../../exercise/domain/exercise-name.js';
 import { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
-import { PrismaService } from '../../../infrastructure/database/prisma/prisma.service.js';
+import { TransactionRunner } from '../../../shared/database/transaction.js';
 import { UnitConverter } from '../domain/units/unit-converter.js';
 import type { ListWorkoutsQuery } from '../dto/requests/list-workouts.query.js';
 import type { LogWorkoutsDto } from '../dto/requests/log-workouts.dto.js';
@@ -44,7 +44,7 @@ const naturalKey = (exerciseId: string, performedAt: Date) =>
 @Injectable()
 export class WorkoutService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunner,
     private readonly exercises: ExerciseRepository,
     private readonly workouts: WorkoutRepository,
     private readonly units: UnitConverter,
@@ -59,10 +59,10 @@ export class WorkoutService {
     );
     this.assertNoDuplicatesInRequest(prepared);
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.transactions.run(async (tx) => {
       const exercises = await this.exercises.resolveByNames(
-        tx,
         prepared.map((e) => e.exerciseName),
+        tx,
       );
       const exerciseOf = (e: PreparedEntry) => exercises.get(e.exerciseKey)!;
 
@@ -72,7 +72,7 @@ export class WorkoutService {
         localDate: e.localDate,
         utcOffsetMinutes: e.utcOffsetMinutes,
       }));
-      const created = await this.workouts.insertEntries(tx, userId, rows);
+      const created = await this.workouts.insertEntries(userId, rows, tx);
       const createdByKey = byNaturalKey(created);
 
       // Entries skipped by the unique index already exist: report their ids as duplicates.
@@ -80,7 +80,7 @@ export class WorkoutService {
         (r) => !createdByKey.has(naturalKey(r.exerciseId, r.performedAt)),
       );
       const existingByKey = byNaturalKey(
-        await this.workouts.findByNaturalKeys(tx, userId, missing),
+        await this.workouts.findByNaturalKeys(userId, missing, tx),
       );
 
       const sets: NewSetRow[] = [];
@@ -110,7 +110,7 @@ export class WorkoutService {
           setCount: createdRow ? e.sets.length : stored.setCount!,
         };
       });
-      await this.workouts.insertSets(tx, sets);
+      await this.workouts.insertSets(sets, tx);
 
       const countOf = (status: EntryStatus) =>
         entries.filter((e) => e.status === status).length;
@@ -138,7 +138,6 @@ export class WorkoutService {
     }
     const after =
       query.cursor !== undefined ? decodeCursor(query.cursor) : undefined;
-    const tx = this.prisma;
     if (query.muscleGroup) {
       await this.assertKnownMuscleGroup(query.muscleGroup);
     }
@@ -147,7 +146,7 @@ export class WorkoutService {
     // need to walk the user's history at all.
     let exerciseIds: string[] | undefined;
     if (query.exercise !== undefined || query.muscleGroup !== undefined) {
-      exerciseIds = await this.exercises.findIdsForFilter(tx, {
+      exerciseIds = await this.exercises.findIdsForFilter({
         nameContains: query.exercise,
         muscleGroup: query.muscleGroup,
       });
@@ -161,7 +160,6 @@ export class WorkoutService {
     }
 
     const rows = await this.workouts.findHistoryPage({
-      tx,
       userId,
       exerciseIds,
       from: query.from,
@@ -172,10 +170,7 @@ export class WorkoutService {
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
 
-    const sets = await this.workouts.findSetsForEntries(
-      tx,
-      page.map((r) => r.id),
-    );
+    const sets = await this.workouts.findSetsForEntries(page.map((r) => r.id));
     const setsByEntry = new Map<string, HistorySet[]>();
     for (const s of sets) {
       const list = setsByEntry.get(s.entry_id) ?? [];
@@ -220,7 +215,7 @@ export class WorkoutService {
   }
 
   private async assertKnownMuscleGroup(slug: string): Promise<void> {
-    const slugs = await this.exercises.listMuscleGroupSlugs(this.prisma);
+    const slugs = await this.exercises.listMuscleGroupSlugs();
     if (!slugs.includes(slug)) {
       throw new AppException(
         HttpStatus.BAD_REQUEST,

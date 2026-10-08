@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsIn, IsOptional, IsString, Length } from 'class-validator';
-import { IsCalendarDate } from '../../domain/time/calendar-date.js';
+import { IsCalendarDate } from '../validators/date.validators.js';
 import {
   SUPPORTED_UNITS,
   type WeightUnit,
