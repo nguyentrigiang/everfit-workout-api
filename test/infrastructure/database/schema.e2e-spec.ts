@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../../src/generated/prisma/client.js';
+import { PrismaClient } from '../../../src/generated/prisma/client.js';
 
 // Verifies constraints enforced by the database itself (not by application code).
 describe('database schema constraints (e2e)', () => {

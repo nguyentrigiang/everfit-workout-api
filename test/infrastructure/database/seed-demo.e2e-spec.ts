@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../../src/generated/prisma/client.js';
+import { PrismaClient } from '../../../src/generated/prisma/client.js';
 import {
   type DemoSeedOptions,
   seedDemoWorkouts,
-} from '../../src/infrastructure/database/seed/seed-demo.js';
+} from '../../../src/infrastructure/database/seed/seed-demo.js';
 
 // Uses the catalog seeded by the e2e global setup.
 describe('seedDemoWorkouts (e2e)', () => {
