@@ -25,7 +25,7 @@ Tools: Claude Code (main session = implementer), a `domain-reviewer` subagent (r
 | A15 | Concurrency | Bulk inserts in request order | Two concurrent requests with the same keys in a different order lock the unique index crosswise → deadlock (500) | Reviewer subagent | `ORDER BY` natural key in the `INSERT ... SELECT` for entries and new exercises; e2e with reversed bodies | `7fe3785` |
 | A16 | API | Duplicate entries reported `setCount` from the request | Response claimed sets that were never stored | Reviewer subagent | Return stored count for duplicates | `7fe3785` |
 | A17 | Error handling | Error `path` from `req.url` | Express strips the global prefix: `/api/v1/x` reported as `/x` | E2E test after adding the prefix | Use `req.originalUrl` | `7fe3785` |
-| A18 | Testing | E2E test logged a workout on 2026-11-01 | That date was in the future, so validation correctly rejected it: the test was wrong, not the code | Test failure, investigated before "fixing" code | Fixed the test date | `7fe3785` |
+| A18 | Testing | E2E test logged a workout on 2026-11-01 | That date was in the future, so validation correctly rejected it: the test was wrong, not the code | Test failure, investigated before "fixing" code | Fixed the test date. Repeated once in the PR tests (Oct 12 when today was Oct 8), fixed the same way | `7fe3785`, PR endpoint commit |
 | A19 | SQL | `LIKE ... ESCAPE '\'` written inside a TS template literal | In a template literal `'\'` is just `'`: the SQL would have been `ESCAPE '')` (syntax error, or wildcards unescaped) | Self-review of the generated SQL before running | Write `'\\'` in source; e2e test that `exercise=%` matches nothing | history endpoint commit |
 | A20 | Testing | E2E suite reused a long-lived test DB | Rows from earlier runs (an auto-created `squat`, kept by the insert-only seed) made history tests fail on display names | E2E failure, traced to leftover data rather than code | Global setup truncates all tables (only if the DB name ends in `_test`) before seeding | history endpoint commit |
 
@@ -41,6 +41,7 @@ Tools: Claude Code (main session = implementer), a `domain-reviewer` subagent (r
 | B6 | AI recommended a 5-minute clock-skew tolerance for future dates | Rejected by me: no tolerance. Trade-off documented. |
 | B7 | AI proposed a large first plan (scaffold + config + logging + validation + Prisma + Docker + Swagger) | Rejected by me: one concern per plan. Rule added to CLAUDE.md. |
 | B8 | Reviewer: test for reps = 0, top-level-array body paths, e2e test controller for the pipe | Skipped: reps ≥ 1 enforced by DTO and DB CHECK; no endpoint takes a top-level array; pipe covered by the first real endpoint's e2e tests. |
+| B9 | Reviewer: compute PR `difference` from unrounded kg values, then round | Rejected: the difference must match the two rounded values shown to the user (105 vs 100 → 5); the exact approach can differ by ≤ 0.01 and look like a bug. Recorded in DECISIONS.md. |
 
 ## C. Process corrections to the AI
 

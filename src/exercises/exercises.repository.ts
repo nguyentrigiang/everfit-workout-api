@@ -54,4 +54,15 @@ export class ExercisesRepository {
     });
     return rows.map((r) => r.slug);
   }
+
+  /** Exact lookup by normalized name (case and whitespace insensitive). */
+  async findByName(
+    tx: Prisma.TransactionClient,
+    name: string,
+  ): Promise<ResolvedExercise | null> {
+    return tx.exercise.findUnique({
+      where: { nameNormalized: normalizeExerciseName(name) },
+      select: { id: true, name: true },
+    });
+  }
 }
