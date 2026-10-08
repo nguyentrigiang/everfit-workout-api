@@ -1,51 +1,40 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { App } from 'supertest/types.js';
-import { AppModule } from './../src/app.module.js';
+import type { App } from 'supertest/types.js';
+import { createTestApp } from './utils/create-test-app.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-describe('AppController (e2e)', () => {
+describe('App (e2e)', () => {
   let app: INestApplication<App>;
 
-  beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    await app.init();
+  beforeAll(async () => {
+    app = await createTestApp();
   });
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+  afterAll(async () => {
+    await app.close();
   });
 
   describe('request id', () => {
     it('generates a UUID x-request-id when the client sends none', async () => {
-      const res = await request(app.getHttpServer()).get('/').expect(200);
+      const res = await request(app.getHttpServer()).get('/api/v1/nope');
 
       expect(res.headers['x-request-id']).toMatch(UUID);
     });
 
     it('echoes the client-provided x-request-id', async () => {
       const res = await request(app.getHttpServer())
-        .get('/')
-        .set('x-request-id', 'abc-123')
-        .expect(200);
+        .get('/api/v1/nope')
+        .set('x-request-id', 'abc-123');
 
       expect(res.headers['x-request-id']).toBe('abc-123');
     });
 
     it('replaces an unsafe client x-request-id with a generated UUID', async () => {
       const res = await request(app.getHttpServer())
-        .get('/')
-        .set('x-request-id', 'bad id with spaces')
-        .expect(200);
+        .get('/api/v1/nope')
+        .set('x-request-id', 'bad id with spaces');
 
       expect(res.headers['x-request-id']).toMatch(UUID);
     });
@@ -54,7 +43,7 @@ describe('AppController (e2e)', () => {
   describe('error responses', () => {
     it('returns the standard 404 shape with the same requestId as the header', async () => {
       const res = await request(app.getHttpServer())
-        .get('/does-not-exist')
+        .get('/api/v1/does-not-exist')
         .expect(404);
 
       expect(res.body).toMatchObject({
@@ -62,15 +51,22 @@ describe('AppController (e2e)', () => {
         code: 'NOT_FOUND',
         error: 'Not Found',
         details: [],
-        path: '/does-not-exist',
+        path: '/api/v1/does-not-exist',
       });
       expect(res.body.requestId).toBe(res.headers['x-request-id']);
+    });
+
+    it('serves routes only under the /api/v1 prefix', async () => {
+      await request(app.getHttpServer())
+        .post('/users/u1/workouts')
+        .send({})
+        .expect(404);
     });
 
     // A dedicated MALFORMED_JSON code is a known follow-up (see docs/REQUIREMENTS.md backlog).
     it('returns 400 BAD_REQUEST in the standard shape for an unparsable JSON body', async () => {
       const res = await request(app.getHttpServer())
-        .post('/')
+        .post('/api/v1/users/u1/workouts')
         .set('Content-Type', 'application/json')
         .send('{"entries": [')
         .expect(400);
@@ -82,9 +78,5 @@ describe('AppController (e2e)', () => {
       });
       expect(res.body.requestId).toBe(res.headers['x-request-id']);
     });
-  });
-
-  afterEach(async () => {
-    await app.close();
   });
 });

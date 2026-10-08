@@ -87,7 +87,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error: STATUS_CODES[status] ?? 'Error',
       message,
       details,
-      path: req.url,
+      // originalUrl keeps the global prefix that Express strips from req.url.
+      path: req.originalUrl ?? req.url,
       timestamp: new Date().toISOString(),
       requestId: this.requestIdOf(req, res),
     };
