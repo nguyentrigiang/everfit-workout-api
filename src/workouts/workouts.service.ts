@@ -122,7 +122,14 @@ export class WorkoutsService {
         const exercise = exerciseOf(e);
         const key = naturalKey(exercise.id, e.performedAt);
         const createdRow = createdByKey.get(key);
-        const stored = createdRow ?? existingByKey.get(key)!;
+        const stored = createdRow ?? existingByKey.get(key);
+        // ON CONFLICT only skips rows whose key already exists, so every entry is either
+        // created or found. Fail loudly (and roll back) if that invariant is ever broken.
+        if (!stored) {
+          throw new Error(
+            `Workout entry ${key} was neither inserted nor found as existing`,
+          );
+        }
         if (createdRow) {
           sets.push(...e.sets.map((s) => ({ ...s, entryId: createdRow.id })));
         }
@@ -139,12 +146,13 @@ export class WorkoutsService {
       });
       await this.workouts.insertSets(tx, sets);
 
-      const createdCount = entries.filter((e) => e.status === 'created').length;
+      const countOf = (status: EntryStatus) =>
+        entries.filter((e) => e.status === status).length;
       return {
         entries,
         summary: {
-          created: createdCount,
-          duplicates: entries.length - createdCount,
+          created: countOf('created'),
+          duplicates: countOf('duplicate'),
         },
       };
     });
