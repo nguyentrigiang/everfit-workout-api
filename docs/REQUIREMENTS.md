@@ -63,10 +63,10 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done. Add evidence (file / test / c
 - [x] D5 README: API docs (endpoints, request/response, error codes) — Swagger at /docs, linked from README (user's choice)
 - [x] D6 README: schema + design decisions (Postgres justification, indexes) — ER diagram, index table
 - [x] D7 README: trade-offs + changes at scale
-- [ ] D8 AI_WORKFLOW.md: tools + purposes
-- [ ] D9 AI_WORKFLOW.md: ≥2 examples of wrong/suboptimal AI output + fix
-- [ ] D10 AI_WORKFLOW.md: ≥1 rejected AI suggestion + why
-- [ ] D11 AI_WORKFLOW.md: prompting strategy
+- [x] D8 AI_WORKFLOW.md: tools + purposes
+- [x] D9 AI_WORKFLOW.md: ≥2 examples of wrong/suboptimal AI output + fix
+- [x] D10 AI_WORKFLOW.md: ≥1 rejected AI suggestion + why
+- [x] D11 AI_WORKFLOW.md: prompting strategy
 - [ ] D12 Video (English, 15–20 min): architecture, demo incl. errors, AI workflow, line-by-line code, 10k coaches scaling
 
 ## Backlog (if time allows)
