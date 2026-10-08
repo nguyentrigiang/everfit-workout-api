@@ -198,7 +198,7 @@ npm run test:e2e            # migrates, wipes and seeds everfit_test, then runs 
 npm run docs:check          # validates the OpenAPI document of a running built app
 ```
 
-- **Unit (95):** unit conversion (incl. adding `stone`), Epley and volume (incl. rounding pitfalls), decimal rounding, date and offset parsing, cursor encoding, env validation, log serializers, exception filter, validation error paths, catalog config validation, bulk-logging status counting, demo data generator (determinism, validation limits, local dates).
+- **Unit (101):** unit conversion (incl. adding `stone`), Epley and volume (incl. rounding pitfalls), decimal rounding, date and offset parsing, cursor encoding, env validation, log serializers, exception filter, validation error paths, catalog config validation, bulk-logging status counting, demo data generator (determinism, validation limits, local dates), EXPLAIN plan parsing and percentiles.
 - **E2E (84):** every endpoint through the real HTTP pipeline and Postgres:
   - logging in mixed units, auto-created exercises
   - idempotent retries, concurrent identical and reversed-order requests
@@ -223,7 +223,26 @@ Tests are named by behavior and assert exact values computed by hand, never re-c
 
 **Dataset:** `npm run db:seed:demo` generates deterministic history (fixed-seed PRNG, fixed end date `2026-09-30`; the same catalog config gives the same data): `perf-user` has 50,000 entries and about 175,000 sets over five years, next to 20 users with 500 entries each, so every query must stay scoped by `user_id`. Weights progress over time, about 20% of sessions are logged in lb, and users have different UTC offsets. The density (several sessions a day) is higher than real life on purpose: query cost depends on rows per user, not on how they are spread. Rows are written with the API's own repository SQL and metric code (`computeSetMetrics`), so stored kg, volume and 1RM values match what the API writes ([details](docs/DECISIONS.md#2026-10-08--demo-and-performance-seed-data)).
 
-> **Pending:** `EXPLAIN ANALYZE` is run on the history (unfiltered, by exercise, by muscle group, by date range, deep cursor) and PR (all-time, range, comparison) queries. The results table will be added here.
+**Results** (PostgreSQL 18.6, `perf-user` with 50,000 entries and 174,636 sets; full plans in [docs/PERFORMANCE.md](docs/PERFORMANCE.md)):
+
+| Query | Plan | DB time | HTTP p50 / p95 |
+|---|---|---|---|
+| History, first page (20 / 100) | Index Scan on `(user_id, performed_at DESC, id DESC)`, stops after `limit + 1` rows, no sort | 0.24 / 0.50 ms | 3.3 / 4.5 ms |
+| History, deep page (cursor after 49,000 entries) | Same index, cursor becomes the index start | 0.15 ms | 3.6 / 4.8 ms |
+| History by exercise / muscle group / month | Unique key or history index, plus a semi-join on the 31-row catalog | 0.2–1.1 ms | 3.2 / 5.2 ms |
+| Sets for a page of 100 entries | `UNIQUE (entry_id, set_index)` | 0.10 ms | — |
+| PRs, all time | Three top-1 Index Scans on the `(user_id, exercise_id, <metric> DESC)` indexes | 0.07 ms | 2.8 / 3.0 ms |
+| PRs, one month / month vs month | Planner picks the metric index or `(user_id, exercise_id, local_date)` by range | 0.14–0.34 ms | 3.1 / 4.8 ms |
+| **Worst case:** exercise filter matching nothing | Walks every entry of the user (50,000 rows) | **13.8 ms** | 13.0 / 14.2 ms |
+
+Re-run with `npm run db:seed:demo && npm run build && npm run db:explain` (the app must be running for the HTTP columns).
+
+**Findings:**
+- Keyset pagination keeps the deepest page as fast as the first one: OFFSET would read and discard 49,000 rows.
+- Each PR is one index lookup that reads a handful of rows, independent of history size. The denormalized metric columns are what make this possible.
+- No new index is needed for the 50k target. A suggested `(user_id, exercise_id, performed_at DESC, id DESC)` index was measured and rejected: the existing unique key already orders entries within an exercise.
+- The only path that grows with history size is an exercise or muscle-group filter that matches few or no entries, because the history index is walked until `limit` matches are found. It stays under 20 ms at 50k entries. The fix is a query change, not an index: resolve the matching exercise ids first (return early when there are none) and read each exercise's entries through the unique key. This is the next optimization step.
+- About 3 ms of each HTTP request is the Nest pipeline, unit conversion and JSON; the database accounts for well under 1 ms.
 
 ## Trade-offs
 

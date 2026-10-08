@@ -28,6 +28,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "db:seed": "node dist/database/seed/main.js",
     "db:seed:demo": "node dist/database/seed/demo-main.js",
+    "db:explain": "node dist/database/perf/explain.js",
     "docs:check": "node scripts/check-openapi.mjs"
   },
   "dependencies": {
