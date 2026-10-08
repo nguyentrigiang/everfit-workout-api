@@ -34,7 +34,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done. Add evidence (file / test / c
 - [ ] E3 Date range with no data → empty result + message, not error
 - [x] E4 Timezone strategy implemented and documented — README "Key design decisions", DECISIONS.md
 - [ ] E5 Concurrent writes (same user, same exercise, same time)
-- [x] E6 Performance with 50,000+ entries per user (seed + EXPLAIN evidence) — `npm run db:seed:demo` + `npm run db:explain` → docs/PERFORMANCE.md; follow-up: early return / per-exercise reads for filters that match few entries
+- [x] E6 Performance with 50,000+ entries per user (seed + EXPLAIN evidence) — `npm run db:seed:demo` + `npm run db:explain` → docs/PERFORMANCE.md; filters matching no exercise return early (13.8 → 0.01 ms); per-exercise reads for rarely trained exercises listed under scaling
 
 ## Architecture
 

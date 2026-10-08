@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { cleanDisplayName, normalizeExerciseName } from './exercise-name.js';
 
 export interface ResolvedExercise {
@@ -55,6 +55,36 @@ export class ExercisesRepository {
     return rows.map((r) => r.slug);
   }
 
+  /**
+   * Ids of the exercises matching history filters (both filters must match). Runs on
+   * the small catalog so the history query gets a concrete id list, or can be skipped
+   * entirely when nothing matches.
+   */
+  async findIdsForFilter(
+    tx: Prisma.TransactionClient,
+    filter: { nameContains?: string; muscleGroup?: string },
+  ): Promise<string[]> {
+    const conditions: Prisma.Sql[] = [];
+    if (filter.nameContains !== undefined) {
+      const pattern = `%${escapeLike(normalizeExerciseName(filter.nameContains))}%`;
+      conditions.push(
+        Prisma.sql`ex.name_normalized LIKE ${pattern} ESCAPE '\\'`,
+      );
+    }
+    if (filter.muscleGroup !== undefined) {
+      conditions.push(Prisma.sql`ex.id IN (
+        SELECT emg.exercise_id FROM exercise_muscle_groups emg
+        JOIN muscle_groups mg ON mg.id = emg.muscle_group_id
+        WHERE mg.slug = ${filter.muscleGroup})`);
+    }
+    if (conditions.length === 0) {
+      throw new Error('findIdsForFilter needs at least one filter');
+    }
+    const rows = await tx.$queryRaw<{ id: string }[]>`
+      SELECT ex.id FROM exercises ex WHERE ${Prisma.join(conditions, ' AND ')}`;
+    return rows.map((r) => r.id);
+  }
+
   /** Exact lookup by normalized name (case and whitespace insensitive). */
   async findByName(
     tx: Prisma.TransactionClient,
@@ -65,4 +95,9 @@ export class ExercisesRepository {
       select: { id: true, name: true },
     });
   }
+}
+
+/** Escapes LIKE wildcards so user input matches literally. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }

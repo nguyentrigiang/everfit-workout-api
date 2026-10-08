@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import { encodeCursor } from '../../common/pagination/cursor.js';
+import { ExercisesRepository } from '../../exercises/exercises.repository.js';
 import { RecordsRepository } from '../../records/records.repository.js';
 import { WorkoutsRepository } from '../../workouts/workouts.repository.js';
 import { percentile, type PlanSummary, summarizePlan } from './perf-report.js';
@@ -117,6 +118,7 @@ async function buildScenarios(prisma: PrismaClient): Promise<Scenario[]> {
   // Standalone script outside Nest DI; the repositories have no dependencies.
   const workouts = new WorkoutsRepository();
   const records = new RecordsRepository();
+  const exercises = new ExercisesRepository();
 
   const [deadlift] = await prisma.$queryRaw<{ id: string }[]>`
     SELECT id FROM exercises WHERE name_normalized = 'deadlift'`;
@@ -139,6 +141,18 @@ async function buildScenarios(prisma: PrismaClient): Promise<Scenario[]> {
     tx: Prisma.TransactionClient,
     extra: Partial<Parameters<WorkoutsRepository['findHistoryPage']>[0]>,
   ) => workouts.findHistoryPage({ tx, userId: USER, limit: 20, ...extra });
+  // Same sequence as WorkoutsService.listHistory: resolve ids on the catalog, return
+  // early when nothing matches, otherwise read history for those ids. Both are measured.
+  const filtered = async (
+    tx: Prisma.TransactionClient,
+    filter: { nameContains?: string; muscleGroup?: string },
+    extra: Partial<Parameters<WorkoutsRepository['findHistoryPage']>[0]> = {},
+  ) => {
+    await exercises.findIdsForFilter(tx, filter);
+    // The stand-in returns no rows, so take the real ids from the database.
+    const exerciseIds = await exercises.findIdsForFilter(prisma, filter);
+    if (exerciseIds.length > 0) await history(tx, { ...extra, exerciseIds });
+  };
   const prs = (tx: Prisma.TransactionClient, from?: string, to?: string) =>
     records.findRecords(tx, {
       userId: USER,
@@ -169,13 +183,13 @@ async function buildScenarios(prisma: PrismaClient): Promise<Scenario[]> {
     {
       id: 'H4',
       title: 'History filtered by exercise name (squat)',
-      run: (tx) => history(tx, { exerciseSearch: 'squat' }),
+      run: (tx) => filtered(tx, { nameContains: 'squat' }),
       http: 'workouts?limit=20&exercise=squat',
     },
     {
       id: 'H5',
       title: 'History filtered by muscle group (core)',
-      run: (tx) => history(tx, { muscleGroup: 'core' }),
+      run: (tx) => filtered(tx, { muscleGroup: 'core' }),
       http: 'workouts?limit=20&muscleGroup=core',
     },
     {
@@ -188,12 +202,11 @@ async function buildScenarios(prisma: PrismaClient): Promise<Scenario[]> {
       id: 'H7',
       title: 'History: muscle group + month + cursor',
       run: (tx) =>
-        history(tx, {
-          muscleGroup: 'back',
-          from: '2024-03-01',
-          to: '2024-03-31',
-          after: midCursor,
-        }),
+        filtered(
+          tx,
+          { muscleGroup: 'back' },
+          { from: '2024-03-01', to: '2024-03-31', after: midCursor },
+        ),
       http: `workouts?limit=20&muscleGroup=back&from=2024-03-01&to=2024-03-31&cursor=${encodeCursor(midCursor)}`,
     },
     {
@@ -205,7 +218,7 @@ async function buildScenarios(prisma: PrismaClient): Promise<Scenario[]> {
     {
       id: 'W1',
       title: 'Worst case: exercise name matching nothing',
-      run: (tx) => history(tx, { exerciseSearch: 'zzzz' }),
+      run: (tx) => filtered(tx, { nameContains: 'zzzz' }),
       http: 'workouts?limit=20&exercise=zzzz',
     },
     {
