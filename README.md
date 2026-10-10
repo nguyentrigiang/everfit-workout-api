@@ -104,7 +104,7 @@ flowchart LR
 src/
 ├── modules/                 business capabilities
 │   ├── workout/             logging, history, personal records, unit conversion
-│   │   ├── controllers/     HTTP only: DTOs in, response shapes out
+│   │   ├── controllers/     HTTP only: DTOs in, response shapes out; Swagger docs in *.docs.ts
 │   │   ├── services/        business rules and orchestration
 │   │   ├── repositories/    WorkoutRepository contract + Prisma implementations
 │   │   ├── dto/             requests/, responses/, validators/
