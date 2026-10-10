@@ -18,29 +18,37 @@ export function encodeCursor(cursor: HistoryCursor): string {
 }
 
 export function decodeCursor(value: string): HistoryCursor {
-  try {
-    const raw: unknown = JSON.parse(
-      Buffer.from(value, 'base64url').toString('utf8'),
+  const cursor = parseCursor(value);
+  if (!cursor) {
+    throw new AppException(
+      HttpStatus.BAD_REQUEST,
+      ErrorCode.BAD_REQUEST,
+      'Invalid cursor',
+      [{ field: 'cursor', message: 'cursor is malformed or expired' }],
     );
-    if (typeof raw === 'object' && raw !== null) {
-      const { t, id } = raw as { t?: unknown; id?: unknown };
-      const performedAt = typeof t === 'string' ? new Date(t) : null;
-      if (
-        performedAt &&
-        !Number.isNaN(performedAt.getTime()) &&
-        typeof id === 'string' &&
-        UUID.test(id)
-      ) {
-        return { performedAt, id };
-      }
-    }
-  } catch {
-    // fall through
   }
-  throw new AppException(
-    HttpStatus.BAD_REQUEST,
-    ErrorCode.BAD_REQUEST,
-    'Invalid cursor',
-    [{ field: 'cursor', message: 'cursor is malformed or expired' }],
-  );
+  return cursor;
+}
+
+/** Null for anything that is not a cursor produced by encodeCursor. */
+function parseCursor(value: string): HistoryCursor | null {
+  const payload = parseJson(Buffer.from(value, 'base64url').toString('utf8'));
+  if (typeof payload !== 'object' || payload === null) return null;
+
+  const { t: time, id } = payload as { t?: unknown; id?: unknown };
+  if (typeof time !== 'string') return null;
+  if (typeof id !== 'string' || !UUID.test(id)) return null;
+
+  const performedAt = new Date(time);
+  if (Number.isNaN(performedAt.getTime())) return null;
+  return { performedAt, id };
+}
+
+/** Undefined when the text is not valid JSON. */
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
 }
