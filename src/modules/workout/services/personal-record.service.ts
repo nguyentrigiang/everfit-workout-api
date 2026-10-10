@@ -6,7 +6,10 @@ import {
   type ErrorDetail,
 } from '../../../shared/errors/app.exception.js';
 import { ErrorCode } from '../../../shared/errors/error-code.js';
-import { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
+import {
+  ExerciseRepository,
+  type ResolvedExercise,
+} from '../../exercise/repositories/exercise.repository.js';
 import { UnitConverter } from '../domain/units/unit-converter.js';
 import type { PersonalRecordsQuery } from '../dto/requests/personal-records.query.js';
 import {
@@ -16,12 +19,17 @@ import {
 } from '../repositories/personal-record.repository.js';
 import {
   NO_RECORDS_MESSAGE,
+  type PersonalRecord,
   type RecordDifference,
   type RecordSet,
   type RecordsResult,
 } from '../dto/responses/personal-record.responses.js';
 
-const KEY_BY_METRIC: Record<RecordMetric, keyof RecordSet> = {
+/** A stored kg value as the repository returns it (an exact decimal). */
+type KgValue = RecordRow['weight_kg'];
+
+/** Which field of the response each metric fills. */
+const RECORD_KEY_BY_METRIC: Record<RecordMetric, keyof RecordSet> = {
   weight: 'heaviestWeight',
   volume: 'highestVolume',
   e1rm: 'bestEstimated1RM',
@@ -40,25 +48,18 @@ export class PersonalRecordService {
     query: PersonalRecordsQuery,
   ): Promise<RecordsResult> {
     this.validateRanges(query);
+    const exercise = await this.findExerciseOrThrow(query.exercise);
+    const hasComparison = query.compareFrom !== undefined;
 
-    const exercise = await this.exercises.findByName(query.exercise);
-    if (!exercise) {
-      throw new AppException(
-        HttpStatus.NOT_FOUND,
-        ErrorCode.NOT_FOUND,
-        `Exercise "${query.exercise}" not found`,
-      );
-    }
-
-    const compare = query.compareFrom !== undefined;
-    const [mainRows, compareRows] = await Promise.all([
+    // Both ranges are read in parallel; each is three indexed top-1 lookups.
+    const [mainRows, comparisonRows] = await Promise.all([
       this.records.findRecords({
         userId,
         exerciseId: exercise.id,
         from: query.from,
         to: query.to,
       }),
-      compare
+      hasComparison
         ? this.records.findRecords({
             userId,
             exerciseId: exercise.id,
@@ -69,57 +70,73 @@ export class PersonalRecordService {
     ]);
 
     const records = this.toRecordSet(mainRows, query.unit);
-    const compared = compare ? this.toRecordSet(compareRows, query.unit) : null;
-    const empty = Object.values(records).every((r) => r === null);
-
-    return {
+    const result: RecordsResult = {
       data: {
         exercise,
         unit: query.unit,
         range: { from: query.from ?? null, to: query.to ?? null },
         records,
-        ...(compared && {
-          comparison: {
-            range: {
-              from: query.compareFrom ?? null,
-              to: query.compareTo ?? null,
-            },
-            records: compared,
-            difference: difference(records, compared),
-          },
-        }),
       },
-      ...(empty && { message: NO_RECORDS_MESSAGE }),
     };
+    if (hasComparison) {
+      const comparedRecords = this.toRecordSet(comparisonRows, query.unit);
+      result.data.comparison = {
+        range: {
+          from: query.compareFrom ?? null,
+          to: query.compareTo ?? null,
+        },
+        records: comparedRecords,
+        difference: difference(records, comparedRecords),
+      };
+    }
+    if (hasNoRecords(records)) {
+      result.message = NO_RECORDS_MESSAGE;
+    }
+    return result;
   }
 
+  private async findExerciseOrThrow(name: string): Promise<ResolvedExercise> {
+    const exercise = await this.exercises.findByName(name);
+    if (!exercise) {
+      throw new AppException(
+        HttpStatus.NOT_FOUND,
+        ErrorCode.NOT_FOUND,
+        `Exercise "${name}" not found`,
+      );
+    }
+    return exercise;
+  }
+
+  /** One row per metric at most; a metric without a row stays null. */
   private toRecordSet(rows: RecordRow[], unit: string): RecordSet {
-    const set: RecordSet = {
+    const recordSet: RecordSet = {
       heaviestWeight: null,
       highestVolume: null,
       bestEstimated1RM: null,
     };
     for (const row of rows) {
-      const valueKg = {
-        weight: row.weight_kg,
-        volume: row.volume_kg,
-        e1rm: row.e1rm_kg,
-      }[row.metric];
-      set[KEY_BY_METRIC[row.metric]] = {
-        value: this.inUnit(valueKg, unit),
-        reps: row.reps,
-        weight: this.inUnit(row.weight_kg, unit),
-        performedAt: row.performed_at.toISOString(),
-        localDate: row.local_date,
-        entryId: row.entry_id,
-        setIndex: row.set_index,
-      };
+      recordSet[RECORD_KEY_BY_METRIC[row.metric]] = this.toPersonalRecord(
+        row,
+        unit,
+      );
     }
-    return set;
+    return recordSet;
   }
 
-  private inUnit(kg: { toString(): string }, unit: string): number {
-    return toApiNumber(this.units.fromKg(kg.toString(), unit));
+  private toPersonalRecord(row: RecordRow, unit: string): PersonalRecord {
+    return {
+      value: this.toRequestedUnit(kgValueOf(row), unit),
+      reps: row.reps,
+      weight: this.toRequestedUnit(row.weight_kg, unit),
+      performedAt: row.performed_at.toISOString(),
+      localDate: row.local_date,
+      entryId: row.entry_id,
+      setIndex: row.set_index,
+    };
+  }
+
+  private toRequestedUnit(valueKg: KgValue, unit: string): number {
+    return toApiNumber(this.units.fromKg(valueKg.toString(), unit));
   }
 
   private validateRanges(query: PersonalRecordsQuery): void {
@@ -127,9 +144,12 @@ export class PersonalRecordService {
     if (query.from && query.to && query.from > query.to) {
       details.push({ field: 'from', message: 'from must not be after to' });
     }
-    if ((query.compareFrom === undefined) !== (query.compareTo === undefined)) {
+
+    const hasCompareFrom = query.compareFrom !== undefined;
+    const hasCompareTo = query.compareTo !== undefined;
+    if (hasCompareFrom !== hasCompareTo) {
       details.push({
-        field: query.compareFrom === undefined ? 'compareFrom' : 'compareTo',
+        field: hasCompareFrom ? 'compareTo' : 'compareFrom',
         message: 'compareFrom and compareTo must be provided together',
       });
     } else if (
@@ -142,6 +162,7 @@ export class PersonalRecordService {
         message: 'compareFrom must not be after compareTo',
       });
     }
+
     if (details.length > 0) {
       throw new AppException(
         HttpStatus.BAD_REQUEST,
@@ -153,19 +174,38 @@ export class PersonalRecordService {
   }
 }
 
+/** The stored kg value of the metric this row is the record for. */
+function kgValueOf(row: RecordRow): KgValue {
+  switch (row.metric) {
+    case 'weight':
+      return row.weight_kg;
+    case 'volume':
+      return row.volume_kg;
+    case 'e1rm':
+      return row.e1rm_kg;
+  }
+}
+
+function hasNoRecords(records: RecordSet): boolean {
+  return Object.values(records).every((record) => record === null);
+}
+
 /** current − compared per metric (exact decimal math), null when either side is missing. */
 export function difference(
   current: RecordSet,
   compared: RecordSet,
 ): RecordDifference {
-  const diff = (key: keyof RecordSet) => {
-    const a = current[key];
-    const b = compared[key];
-    return a && b ? toApiNumber(new Decimal(a.value).minus(b.value)) : null;
+  const differenceOf = (key: keyof RecordSet): number | null => {
+    const currentRecord = current[key];
+    const comparedRecord = compared[key];
+    if (!currentRecord || !comparedRecord) return null;
+    return toApiNumber(
+      new Decimal(currentRecord.value).minus(comparedRecord.value),
+    );
   };
   return {
-    heaviestWeight: diff('heaviestWeight'),
-    highestVolume: diff('highestVolume'),
-    bestEstimated1RM: diff('bestEstimated1RM'),
+    heaviestWeight: differenceOf('heaviestWeight'),
+    highestVolume: differenceOf('highestVolume'),
+    bestEstimated1RM: differenceOf('bestEstimated1RM'),
   };
 }
