@@ -83,4 +83,4 @@ Small commits, one concern each, in the order the work happened (`git log --onel
 - Measurements beat predictions, including the AI's own.
 - Writing every mistake down kept the process honest, and turned into this document.
 
-Full list: 31 wrong or suboptimal outputs, 9 rejected suggestions and 4 process corrections in [`docs/AI_LOG.md`](docs/AI_LOG.md).
+Full list: 32 wrong or suboptimal outputs, 9 rejected suggestions and 4 process corrections in [`docs/AI_LOG.md`](docs/AI_LOG.md).

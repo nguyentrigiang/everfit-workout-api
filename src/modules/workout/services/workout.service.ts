@@ -8,19 +8,27 @@ import { toApiNumber } from '../domain/decimal.js';
 import { decodeCursor, encodeCursor } from './history-cursor.js';
 import { parseOffsetDateTime } from '../domain/time/offset-datetime.js';
 import { normalizeExerciseName } from '../../exercise/domain/exercise-name.js';
-import { ExerciseRepository } from '../../exercise/repositories/exercise.repository.js';
-import { TransactionRunner } from '../../../shared/database/transaction.js';
+import {
+  ExerciseRepository,
+  type ResolvedExercise,
+} from '../../exercise/repositories/exercise.repository.js';
+import {
+  type Transaction,
+  TransactionRunner,
+} from '../../../shared/database/transaction.js';
 import { UnitConverter } from '../domain/units/unit-converter.js';
 import type { ListWorkoutsQuery } from '../dto/requests/list-workouts.query.js';
 import type { LogWorkoutsDto } from '../dto/requests/log-workouts.dto.js';
 import { computeSetMetrics } from '../domain/strength-metrics.js';
 import {
+  type HistoryEntryRow,
+  type HistorySetRow,
   type NewSetRow,
   type StoredEntryRow,
   WorkoutRepository,
 } from '../repositories/workout.repository.js';
 import {
-  type EntryStatus,
+  type HistoryEntry,
   type HistoryPage,
   type HistorySet,
   type LoggedEntry,
@@ -28,6 +36,7 @@ import {
   NO_WORKOUTS_MESSAGE,
 } from '../dto/responses/workout.responses.js';
 
+/** A request entry after parsing and unit conversion, before touching the database. */
 interface PreparedEntry {
   index: number;
   exerciseKey: string;
@@ -38,6 +47,15 @@ interface PreparedEntry {
   sets: Omit<NewSetRow, 'entryId'>[];
 }
 
+/** A prepared entry with its catalog exercise and natural key, ready to be saved. */
+interface EntryToSave extends PreparedEntry {
+  exercise: ResolvedExercise;
+  naturalKey: string;
+}
+
+type StoredEntriesByKey = Map<string, StoredEntryRow>;
+
+/** Same exercise at the same instant = same workout entry (the unique index in the DB). */
 const naturalKey = (exerciseId: string, performedAt: Date) =>
   `${exerciseId}|${performedAt.getTime()}`;
 
@@ -54,111 +72,168 @@ export class WorkoutService {
     userId: string,
     dto: LogWorkoutsDto,
   ): Promise<LogWorkoutsResult> {
-    const prepared = dto.entries.map((entry, index) =>
+    const preparedEntries = dto.entries.map((entry, index) =>
       this.prepare(entry, index),
     );
-    this.assertNoDuplicatesInRequest(prepared);
+    this.assertNoDuplicatesInRequest(preparedEntries);
 
     return this.transactions.run(async (tx) => {
-      const exercises = await this.exercises.resolveByNames(
-        prepared.map((e) => e.exerciseName),
+      const entries = await this.attachExercises(preparedEntries, tx);
+      const createdByKey = await this.insertNewEntries(userId, entries, tx);
+      const existingByKey = await this.findAlreadyLoggedEntries(
+        userId,
+        entries,
+        createdByKey,
         tx,
       );
-      const exerciseOf = (e: PreparedEntry) => exercises.get(e.exerciseKey)!;
 
-      const rows = prepared.map((e) => ({
-        exerciseId: exerciseOf(e).id,
-        performedAt: e.performedAt,
-        localDate: e.localDate,
-        utcOffsetMinutes: e.utcOffsetMinutes,
-      }));
-      const created = await this.workouts.insertEntries(userId, rows, tx);
-      const createdByKey = byNaturalKey(created);
-
-      // Entries skipped by the unique index already exist: report their ids as duplicates.
-      const missing = rows.filter(
-        (r) => !createdByKey.has(naturalKey(r.exerciseId, r.performedAt)),
+      const loggedEntries = entries.map((entry) =>
+        this.toLoggedEntry(entry, createdByKey, existingByKey),
       );
-      const existingByKey = byNaturalKey(
-        await this.workouts.findByNaturalKeys(userId, missing, tx),
-      );
+      await this.insertSetsOfCreatedEntries(entries, createdByKey, tx);
 
-      const sets: NewSetRow[] = [];
-      const entries = prepared.map((e): LoggedEntry => {
-        const exercise = exerciseOf(e);
-        const key = naturalKey(exercise.id, e.performedAt);
-        const createdRow = createdByKey.get(key);
-        const stored = createdRow ?? existingByKey.get(key);
-        // ON CONFLICT only skips rows whose key already exists, so every entry is either
-        // created or found. Fail loudly (and roll back) if that invariant is ever broken.
-        if (!stored) {
-          throw new Error(
-            `Workout entry ${key} was neither inserted nor found as existing`,
-          );
-        }
-        if (createdRow) {
-          sets.push(...e.sets.map((s) => ({ ...s, entryId: createdRow.id })));
-        }
-        return {
-          index: e.index,
-          id: stored.id,
-          status: createdRow ? 'created' : 'duplicate',
-          exercise: { id: exercise.id, name: exercise.name },
-          performedAt: stored.performedAt.toISOString(),
-          localDate: stored.localDate,
-          // Duplicates report what is stored, not what this request sent.
-          setCount: createdRow ? e.sets.length : stored.setCount!,
-        };
-      });
-      await this.workouts.insertSets(sets, tx);
+      return { entries: loggedEntries, summary: summarize(loggedEntries) };
+    });
+  }
 
-      const countOf = (status: EntryStatus) =>
-        entries.filter((e) => e.status === status).length;
+  /** Finds or creates the exercise of every entry and computes its natural key. */
+  private async attachExercises(
+    preparedEntries: PreparedEntry[],
+    tx: Transaction,
+  ): Promise<EntryToSave[]> {
+    const exercisesByKey = await this.exercises.resolveByNames(
+      preparedEntries.map((entry) => entry.exerciseName),
+      tx,
+    );
+    return preparedEntries.map((entry) => {
+      const exercise = exercisesByKey.get(entry.exerciseKey);
+      if (!exercise) {
+        throw new Error(`Exercise "${entry.exerciseName}" was not resolved`);
+      }
       return {
-        entries,
-        summary: {
-          created: countOf('created'),
-          duplicates: countOf('duplicate'),
-        },
+        ...entry,
+        exercise,
+        naturalKey: naturalKey(exercise.id, entry.performedAt),
       };
     });
+  }
+
+  /** Inserts the entries; ones already stored are skipped and not returned. */
+  private async insertNewEntries(
+    userId: string,
+    entries: EntryToSave[],
+    tx: Transaction,
+  ): Promise<StoredEntriesByKey> {
+    const createdRows = await this.workouts.insertEntries(
+      userId,
+      entries.map((entry) => ({
+        exerciseId: entry.exercise.id,
+        performedAt: entry.performedAt,
+        localDate: entry.localDate,
+        utcOffsetMinutes: entry.utcOffsetMinutes,
+      })),
+      tx,
+    );
+    return mapByNaturalKey(createdRows);
+  }
+
+  /**
+   * Entries the insert skipped were logged before (e.g. a client retry). The insert
+   * does not return them, so look them up to report their stored id and set count.
+   */
+  private async findAlreadyLoggedEntries(
+    userId: string,
+    entries: EntryToSave[],
+    createdByKey: StoredEntriesByKey,
+    tx: Transaction,
+  ): Promise<StoredEntriesByKey> {
+    const notCreated = entries.filter(
+      (entry) => !createdByKey.has(entry.naturalKey),
+    );
+    const existingRows = await this.workouts.findByNaturalKeys(
+      userId,
+      notCreated.map((entry) => ({
+        exerciseId: entry.exercise.id,
+        performedAt: entry.performedAt,
+      })),
+      tx,
+    );
+    return mapByNaturalKey(existingRows);
+  }
+
+  private toLoggedEntry(
+    entry: EntryToSave,
+    createdByKey: StoredEntriesByKey,
+    existingByKey: StoredEntriesByKey,
+  ): LoggedEntry {
+    const exercise = { id: entry.exercise.id, name: entry.exercise.name };
+
+    const createdRow = createdByKey.get(entry.naturalKey);
+    if (createdRow) {
+      return {
+        index: entry.index,
+        id: createdRow.id,
+        status: 'created',
+        exercise,
+        performedAt: createdRow.performedAt.toISOString(),
+        localDate: createdRow.localDate,
+        setCount: entry.sets.length,
+      };
+    }
+
+    // ON CONFLICT only skips rows whose key already exists, so every entry is either
+    // created or found. Fail loudly (and roll back) if that invariant is ever broken.
+    const existingRow = existingByKey.get(entry.naturalKey);
+    if (!existingRow) {
+      throw new Error(
+        `Workout entry ${entry.naturalKey} was neither inserted nor found as existing`,
+      );
+    }
+    return {
+      index: entry.index,
+      id: existingRow.id,
+      status: 'duplicate',
+      exercise,
+      performedAt: existingRow.performedAt.toISOString(),
+      localDate: existingRow.localDate,
+      // Duplicates report what is stored, not what this request sent.
+      // findByNaturalKeys always returns the set count.
+      setCount: existingRow.setCount!,
+    };
+  }
+
+  /** Writes sets only for new entries: a duplicate keeps the sets it was stored with. */
+  private async insertSetsOfCreatedEntries(
+    entries: EntryToSave[],
+    createdByKey: StoredEntriesByKey,
+    tx: Transaction,
+  ): Promise<void> {
+    const sets: NewSetRow[] = entries.flatMap((entry) => {
+      const createdRow = createdByKey.get(entry.naturalKey);
+      if (!createdRow) return [];
+      return entry.sets.map((set) => ({ ...set, entryId: createdRow.id }));
+    });
+    await this.workouts.insertSets(sets, tx);
   }
 
   async listWorkouts(
     userId: string,
     query: ListWorkoutsQuery,
   ): Promise<HistoryPage> {
-    if (query.from && query.to && query.from > query.to) {
-      throw new AppException(
-        HttpStatus.BAD_REQUEST,
-        ErrorCode.VALIDATION_ERROR,
-        'Validation failed',
-        [{ field: 'from', message: 'from must not be after to' }],
-      );
-    }
+    this.assertFromNotAfterTo(query.from, query.to);
     const after =
       query.cursor !== undefined ? decodeCursor(query.cursor) : undefined;
     if (query.muscleGroup) {
       await this.assertKnownMuscleGroup(query.muscleGroup);
     }
 
-    // Resolve filters on the small catalog first: when nothing matches there is no
-    // need to walk the user's history at all.
-    let exerciseIds: string[] | undefined;
-    if (query.exercise !== undefined || query.muscleGroup !== undefined) {
-      exerciseIds = await this.exercises.findIdsForFilter({
-        nameContains: query.exercise,
-        muscleGroup: query.muscleGroup,
-      });
-      if (exerciseIds.length === 0) {
-        return {
-          data: [],
-          pagination: { limit: query.limit, hasMore: false, nextCursor: null },
-          message: NO_WORKOUTS_MESSAGE,
-        };
-      }
+    const exerciseIds = await this.findExerciseIdsForFilters(query);
+    // Nothing in the catalog matches: no need to walk the user's history at all.
+    if (exerciseIds?.length === 0) {
+      return emptyHistoryPage(query.limit);
     }
 
+    // The repository returns one extra row so we can tell whether a next page exists.
     const rows = await this.workouts.findHistoryPage({
       userId,
       exerciseIds,
@@ -168,51 +243,39 @@ export class WorkoutService {
       limit: query.limit,
     });
     const hasMore = rows.length > query.limit;
-    const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const pageRows = hasMore ? rows.slice(0, query.limit) : rows;
+    const setsByEntryId = await this.loadSetsByEntryId(pageRows, query.unit);
 
-    const sets = await this.workouts.findSetsForEntries(page.map((r) => r.id));
-    const setsByEntry = new Map<string, HistorySet[]>();
-    for (const s of sets) {
-      const list = setsByEntry.get(s.entry_id) ?? [];
-      list.push({
-        setIndex: s.set_index,
-        reps: s.reps,
-        weight: toApiNumber(this.units.fromKg(s.weight_kg, query.unit)),
-        unit: query.unit,
-        volume: toApiNumber(this.units.fromKg(s.volume_kg, query.unit)),
-        e1rm: toApiNumber(this.units.fromKg(s.e1rm_kg, query.unit)),
-      });
-      setsByEntry.set(s.entry_id, list);
-    }
-
-    const last = page.at(-1);
-    return {
-      data: page.map((r) => ({
-        id: r.id,
-        exercise: {
-          id: r.exercise_id,
-          name: r.exercise_name,
-          muscleGroups: r.muscle_groups,
-        },
-        performedAt: r.performed_at.toISOString(),
-        localDate: r.local_date,
-        sets: setsByEntry.get(r.id) ?? [],
-      })),
+    const page: HistoryPage = {
+      data: pageRows.map((row) =>
+        toHistoryEntry(row, setsByEntryId.get(row.id) ?? []),
+      ),
       pagination: {
         limit: query.limit,
         hasMore,
-        nextCursor:
-          hasMore && last
-            ? encodeCursor({ performedAt: last.performed_at, id: last.id })
-            : null,
+        nextCursor: hasMore ? cursorAfter(pageRows) : null,
       },
-      ...(page.length === 0 && { message: NO_WORKOUTS_MESSAGE }),
     };
+    if (pageRows.length === 0) {
+      page.message = NO_WORKOUTS_MESSAGE;
+    }
+    return page;
+  }
+
+  private assertFromNotAfterTo(from?: string, to?: string): void {
+    if (from && to && from > to) {
+      throw new AppException(
+        HttpStatus.BAD_REQUEST,
+        ErrorCode.VALIDATION_ERROR,
+        'Validation failed',
+        [{ field: 'from', message: 'from must not be after to' }],
+      );
+    }
   }
 
   private async assertKnownMuscleGroup(slug: string): Promise<void> {
-    const slugs = await this.exercises.listMuscleGroupSlugs();
-    if (!slugs.includes(slug)) {
+    const knownSlugs = await this.exercises.listMuscleGroupSlugs();
+    if (!knownSlugs.includes(slug)) {
       throw new AppException(
         HttpStatus.BAD_REQUEST,
         ErrorCode.VALIDATION_ERROR,
@@ -220,11 +283,55 @@ export class WorkoutService {
         [
           {
             field: 'muscleGroup',
-            message: `muscleGroup must be one of: ${slugs.join(', ')}`,
+            message: `muscleGroup must be one of: ${knownSlugs.join(', ')}`,
           },
         ],
       );
     }
+  }
+
+  /**
+   * Resolves the exercise and muscle group filters to exercise ids on the small
+   * catalog. Undefined means "no exercise filter"; an empty list means "nothing matches".
+   */
+  private async findExerciseIdsForFilters(
+    query: ListWorkoutsQuery,
+  ): Promise<string[] | undefined> {
+    if (query.exercise === undefined && query.muscleGroup === undefined) {
+      return undefined;
+    }
+    return this.exercises.findIdsForFilter({
+      nameContains: query.exercise,
+      muscleGroup: query.muscleGroup,
+    });
+  }
+
+  /** Sets of the page's entries, converted to the requested unit and grouped by entry. */
+  private async loadSetsByEntryId(
+    pageRows: HistoryEntryRow[],
+    unit: string,
+  ): Promise<Map<string, HistorySet[]>> {
+    const setRows = await this.workouts.findSetsForEntries(
+      pageRows.map((row) => row.id),
+    );
+    const setsByEntryId = new Map<string, HistorySet[]>();
+    for (const setRow of setRows) {
+      const entrySets = setsByEntryId.get(setRow.entry_id) ?? [];
+      entrySets.push(this.toHistorySet(setRow, unit));
+      setsByEntryId.set(setRow.entry_id, entrySets);
+    }
+    return setsByEntryId;
+  }
+
+  private toHistorySet(setRow: HistorySetRow, unit: string): HistorySet {
+    return {
+      setIndex: setRow.set_index,
+      reps: setRow.reps,
+      weight: toApiNumber(this.units.fromKg(setRow.weight_kg, unit)),
+      unit,
+      volume: toApiNumber(this.units.fromKg(setRow.volume_kg, unit)),
+      e1rm: toApiNumber(this.units.fromKg(setRow.e1rm_kg, unit)),
+    };
   }
 
   /** Pure preparation: parse time, normalize name, convert to kg, compute metrics. */
@@ -233,14 +340,14 @@ export class WorkoutService {
     index: number,
   ): PreparedEntry {
     // The DTO already validated the format, so parsing cannot fail here.
-    const time = parseOffsetDateTime(entry.date)!;
+    const parsedDate = parseOffsetDateTime(entry.date)!;
     return {
       index,
       exerciseKey: normalizeExerciseName(entry.exerciseName),
       exerciseName: entry.exerciseName,
-      performedAt: time.instant,
-      localDate: time.localDate,
-      utcOffsetMinutes: time.utcOffsetMinutes,
+      performedAt: parsedDate.instant,
+      localDate: parsedDate.localDate,
+      utcOffsetMinutes: parsedDate.utcOffsetMinutes,
       sets: entry.sets.map((set, setIndex) => {
         const metrics = computeSetMetrics(
           this.units.toKg(set.weight, set.unit),
@@ -261,17 +368,18 @@ export class WorkoutService {
 
   /** Same exercise at the same instant twice in one request is ambiguous: reject it. */
   private assertNoDuplicatesInRequest(entries: PreparedEntry[]): void {
-    const firstIndex = new Map<string, number>();
+    // Exercises are not resolved yet, so the key uses the normalized name, not the id.
+    const firstIndexByKey = new Map<string, number>();
     const details: ErrorDetail[] = [];
-    for (const e of entries) {
-      const key = `${e.exerciseKey}|${e.performedAt.getTime()}`;
-      const first = firstIndex.get(key);
-      if (first === undefined) {
-        firstIndex.set(key, e.index);
+    for (const entry of entries) {
+      const key = `${entry.exerciseKey}|${entry.performedAt.getTime()}`;
+      const firstIndex = firstIndexByKey.get(key);
+      if (firstIndex === undefined) {
+        firstIndexByKey.set(key, entry.index);
       } else {
         details.push({
-          field: `entries[${e.index}]`,
-          message: `duplicates entries[${first}] (same exercise and date)`,
+          field: `entries[${entry.index}]`,
+          message: `duplicates entries[${firstIndex}] (same exercise and date)`,
         });
       }
     }
@@ -286,6 +394,46 @@ export class WorkoutService {
   }
 }
 
-function byNaturalKey(rows: StoredEntryRow[]): Map<string, StoredEntryRow> {
-  return new Map(rows.map((r) => [naturalKey(r.exerciseId, r.performedAt), r]));
+function mapByNaturalKey(rows: StoredEntryRow[]): StoredEntriesByKey {
+  return new Map(
+    rows.map((row) => [naturalKey(row.exerciseId, row.performedAt), row]),
+  );
+}
+
+function summarize(entries: LoggedEntry[]): LogWorkoutsResult['summary'] {
+  return {
+    created: entries.filter((entry) => entry.status === 'created').length,
+    duplicates: entries.filter((entry) => entry.status === 'duplicate').length,
+  };
+}
+
+function toHistoryEntry(
+  row: HistoryEntryRow,
+  sets: HistorySet[],
+): HistoryEntry {
+  return {
+    id: row.id,
+    exercise: {
+      id: row.exercise_id,
+      name: row.exercise_name,
+      muscleGroups: row.muscle_groups,
+    },
+    performedAt: row.performed_at.toISOString(),
+    localDate: row.local_date,
+    sets,
+  };
+}
+
+function emptyHistoryPage(limit: number): HistoryPage {
+  return {
+    data: [],
+    pagination: { limit, hasMore: false, nextCursor: null },
+    message: NO_WORKOUTS_MESSAGE,
+  };
+}
+
+/** Cursor pointing after the last row of a non-empty page. */
+function cursorAfter(pageRows: HistoryEntryRow[]): string {
+  const lastRow = pageRows[pageRows.length - 1];
+  return encodeCursor({ performedAt: lastRow.performed_at, id: lastRow.id });
 }
