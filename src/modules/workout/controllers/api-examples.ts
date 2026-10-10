@@ -202,6 +202,24 @@ export const RECORDS_EMPTY_EXAMPLE = {
   message: 'No workouts found for this exercise in the given range',
 };
 
+const noRecords = {
+  heaviestWeight: null,
+  highestVolume: null,
+  bestEstimated1RM: null,
+};
+
+export const RECORDS_COMPARISON_EMPTY_EXAMPLE = {
+  data: {
+    ...RECORDS_EXAMPLE.data,
+    comparison: {
+      range: { from: '2025-09-01', to: '2025-09-30' },
+      records: noRecords,
+      difference: noRecords,
+      message: 'No workouts found for this exercise in the comparison range',
+    },
+  },
+};
+
 export const RECORDS_NOT_FOUND_EXAMPLE = error(
   404,
   'NOT_FOUND',

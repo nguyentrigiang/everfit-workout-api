@@ -5,6 +5,7 @@ import {
   ApiExampleResponse,
 } from '../../../shared/swagger/api-responses.js';
 import {
+  RECORDS_COMPARISON_EMPTY_EXAMPLE,
   RECORDS_EMPTY_EXAMPLE,
   RECORDS_EXAMPLE,
   RECORDS_NOT_FOUND_EXAMPLE,
@@ -34,11 +35,17 @@ export const GetPersonalRecordsDocs = () =>
       description:
         'Heaviest set, highest set volume (reps × weight) and best estimated 1RM (Epley), each with the set and date. ' +
         'Without from/to: all history. Add compareFrom/compareTo (e.g. last month) to get per-metric differences. ' +
-        'Ties go to the most recent set.',
+        'Ties go to the most recent set. ' +
+        'An empty range is not an error: its records are null and a message explains it ' +
+        '(top-level for the main range, comparison.message for the comparison range).',
     }),
     ApiExampleResponse(200, 'Records (null when the range has no sets)', {
       compare: { summary: 'This month vs last month', value: RECORDS_EXAMPLE },
       empty: { summary: 'No data in range', value: RECORDS_EMPTY_EXAMPLE },
+      comparisonEmpty: {
+        summary: 'No data in the comparison range',
+        value: RECORDS_COMPARISON_EMPTY_EXAMPLE,
+      },
     }),
     ApiErrorResponse(404, 'Unknown exercise', RECORDS_NOT_FOUND_EXAMPLE),
     ApiErrorResponse(

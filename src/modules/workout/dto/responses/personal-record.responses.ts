@@ -33,6 +33,8 @@ export interface RecordsResult {
       range: DateRange;
       records: RecordSet;
       difference: RecordDifference;
+      /** Present only when the comparison range has no sets. */
+      message?: string;
     };
   };
   message?: string;
@@ -40,3 +42,6 @@ export interface RecordsResult {
 
 export const NO_RECORDS_MESSAGE =
   'No workouts found for this exercise in the given range';
+
+export const NO_COMPARISON_RECORDS_MESSAGE =
+  'No workouts found for this exercise in the comparison range';

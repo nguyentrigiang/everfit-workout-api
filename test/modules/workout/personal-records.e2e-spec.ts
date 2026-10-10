@@ -114,6 +114,8 @@ describe('GET /api/v1/users/:userId/records (e2e)', () => {
       highestVolume: -50,
       bestEstimated1RM: -2,
     });
+    expect(comparison.message).toBeUndefined();
+    expect(res.body.message).toBeUndefined();
   });
 
   it('returns null differences when the compared range is empty', async () => {
@@ -132,6 +134,29 @@ describe('GET /api/v1/users/:userId/records (e2e)', () => {
       highestVolume: null,
       bestEstimated1RM: null,
     });
+    expect(res.body.data.comparison.message).toBe(
+      'No workouts found for this exercise in the comparison range',
+    );
+    // The main range has data, so the top-level message stays absent.
+    expect(res.body.message).toBeUndefined();
+  });
+
+  it('explains each range with its own message when both are empty', async () => {
+    await log(october);
+
+    const res = await records({
+      from: '2025-01-01',
+      to: '2025-01-31',
+      compareFrom: '2024-01-01',
+      compareTo: '2024-01-31',
+    }).expect(200);
+
+    expect(res.body.message).toBe(
+      'No workouts found for this exercise in the given range',
+    );
+    expect(res.body.data.comparison.message).toBe(
+      'No workouts found for this exercise in the comparison range',
+    );
   });
 
   it('reports the most recent set when the same PR value was reached again', async () => {

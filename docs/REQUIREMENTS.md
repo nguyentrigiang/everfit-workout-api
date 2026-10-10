@@ -31,7 +31,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done. Add evidence (file / test / c
 
 - [x] E1 Invalid / unsupported unit — e2e "rejects an unsupported unit (E1)"
 - [x] E2 Missing / malformed fields (null date, negative weight/reps, empty sets) — log-workouts e2e: null date, no offset, future date, negative weight, zero reps, empty sets/entries, unknown fields; DB CHECK constraints
-- [x] E3 Date range with no data → empty result + message, not error — history and records e2e (E3)
+- [x] E3 Date range with no data → empty result + message, not error — history and records e2e (E3); an empty comparison range gets `comparison.message` (records e2e "returns null differences when the compared range is empty", "both are empty")
 - [x] E4 Timezone strategy implemented and documented — README "Key design decisions", DECISIONS.md
 - [x] E5 Concurrent writes (same user, same exercise, same time) — natural key + ON CONFLICT + ordered inserts — e2e concurrent identical / reversed-order requests, schema.e2e concurrent inserts
 - [x] E6 Performance with 50,000+ entries per user (seed + EXPLAIN evidence) — `npm run db:seed:demo` + `npm run db:explain` → docs/PERFORMANCE.md; filters matching no exercise return early (13.8 → 0.01 ms); per-exercise reads for rarely trained exercises listed under scaling

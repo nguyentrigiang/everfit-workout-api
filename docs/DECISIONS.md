@@ -134,3 +134,8 @@ Decisions made with the user during planning. Feeds the README "design decisions
 - Decision: Each operation uses the same name for the controller handler, the service method and the OpenAPI operationId: `logWorkouts`, `listWorkouts`, `getPersonalRecords`. The history operation is `listWorkouts` (was `list` / `listHistory` / `listWorkoutHistory`), matching `GET /workouts` and the `ListWorkoutsQuery` DTO. Repository methods keep persistence names (`findHistoryPage`), and the Swagger summary still reads "Workout history".
 - Alternatives: `getWorkoutHistory` (the assignment's wording and the brief's example); `listWorkoutHistory` (keeps the existing operationId).
 - Why: One name lets a reader follow an operation from the API docs to the handler and the service by search. Before, each layer named it differently and the service mixed styles.
+
+## 2026-10-11 — Message for an empty comparison range
+- Decision: When `compareFrom`/`compareTo` are given and that range has no sets, `data.comparison` gets its own `message` ("No workouts found for this exercise in the comparison range"). The top-level `message` keeps describing the main range only, unchanged; when both ranges are empty, both messages are present.
+- Alternatives: one top-level message whose text depends on which range is empty (main, comparison, both).
+- Why: Each range explains itself, existing responses stay the same, and there is no three-way wording to maintain. Covers E3 for the comparison range too: an empty range is a 200 with a message, never an error.

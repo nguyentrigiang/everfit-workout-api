@@ -18,6 +18,7 @@ import {
   PersonalRecordRepository,
 } from '../repositories/personal-record.repository.js';
 import {
+  NO_COMPARISON_RECORDS_MESSAGE,
   NO_RECORDS_MESSAGE,
   type PersonalRecord,
   type RecordDifference,
@@ -88,6 +89,9 @@ export class PersonalRecordService {
         records: comparedRecords,
         difference: difference(records, comparedRecords),
       };
+      if (hasNoRecords(comparedRecords)) {
+        result.data.comparison.message = NO_COMPARISON_RECORDS_MESSAGE;
+      }
     }
     if (hasNoRecords(records)) {
       result.message = NO_RECORDS_MESSAGE;
