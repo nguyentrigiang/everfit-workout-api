@@ -145,7 +145,7 @@ async function buildScenarios(prisma: PrismaClient): Promise<Scenario[]> {
     tx: Transaction | undefined,
     extra: Partial<Parameters<WorkoutRepository['findHistoryPage']>[0]>,
   ) => workouts.findHistoryPage({ userId: USER, limit: 20, ...extra }, tx);
-  // Same sequence as WorkoutService.listHistory: resolve ids on the catalog, return
+  // Same sequence as WorkoutService.listWorkouts: resolve ids on the catalog, return
   // early when nothing matches, otherwise read history for those ids. Both are measured.
   const filtered = async (
     tx: Transaction | undefined,

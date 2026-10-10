@@ -124,7 +124,7 @@ export class WorkoutService {
     });
   }
 
-  async listHistory(
+  async listWorkouts(
     userId: string,
     query: ListWorkoutsQuery,
   ): Promise<HistoryPage> {

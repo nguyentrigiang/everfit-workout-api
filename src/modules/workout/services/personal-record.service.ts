@@ -35,7 +35,7 @@ export class PersonalRecordService {
     private readonly units: UnitConverter,
   ) {}
 
-  async getRecords(
+  async getPersonalRecords(
     userId: string,
     query: PersonalRecordsQuery,
   ): Promise<RecordsResult> {

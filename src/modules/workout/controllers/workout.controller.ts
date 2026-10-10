@@ -33,7 +33,7 @@ export class WorkoutController {
   // Bulk log. 201 if anything was created, 200 if every entry already existed (retry).
   @Post()
   @LogWorkoutsDocs()
-  async log(
+  async logWorkouts(
     @Param() { userId }: UserParamsDto,
     @Body() body: LogWorkoutsDto,
     @Res({ passthrough: true }) res: Response,
@@ -46,10 +46,10 @@ export class WorkoutController {
   // History, newest first, with filters, unit conversion and cursor pagination.
   @Get()
   @ListWorkoutHistoryDocs()
-  list(
+  listWorkouts(
     @Param() { userId }: UserParamsDto,
     @Query() query: ListWorkoutsQuery,
   ): Promise<HistoryPage> {
-    return this.workouts.listHistory(userId, query);
+    return this.workouts.listWorkouts(userId, query);
   }
 }

@@ -16,10 +16,10 @@ export class PersonalRecordController {
   // Personal records for one exercise, optionally compared with a second date range.
   @Get()
   @GetPersonalRecordsDocs()
-  get(
+  getPersonalRecords(
     @Param() { userId }: UserParamsDto,
     @Query() query: PersonalRecordsQuery,
   ): Promise<RecordsResult> {
-    return this.records.getRecords(userId, query);
+    return this.records.getPersonalRecords(userId, query);
   }
 }
