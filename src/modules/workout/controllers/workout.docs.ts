@@ -72,7 +72,7 @@ export const LogWorkoutsDocs = () =>
 export const ListWorkoutHistoryDocs = () =>
   applyDecorators(
     ApiOperation({
-      operationId: 'listWorkoutHistory',
+      operationId: 'listWorkouts',
       summary: 'Workout history',
       description:
         'Entries newest first with their sets. Filters: partial exercise name, muscle group slug, ' +

@@ -133,14 +133,14 @@ describe('WorkoutService.logWorkouts', () => {
   });
 });
 
-describe('WorkoutService.listHistory', () => {
+describe('WorkoutService.listWorkouts', () => {
   const query = (extra: Partial<ListWorkoutsQuery>) =>
     Object.assign(new ListWorkoutsQuery(), { limit: 20, unit: 'kg' }, extra);
 
   it('returns an empty page without reading history when no exercise matches the filter', async () => {
     const { service, workouts, exercises } = setup([], []);
 
-    const page = await service.listHistory(
+    const page = await service.listWorkouts(
       'user-1',
       query({ exercise: 'zzzz', muscleGroup: 'core' }),
     );
@@ -161,7 +161,7 @@ describe('WorkoutService.listHistory', () => {
     const { service, workouts, exercises } = setup([], []);
     exercises.findIdsForFilter.mockResolvedValue([SQUAT.id]);
 
-    await service.listHistory('user-1', query({ exercise: 'squat' }));
+    await service.listWorkouts('user-1', query({ exercise: 'squat' }));
 
     expect(workouts.findHistoryPage).toHaveBeenCalledWith(
       expect.objectContaining({ exerciseIds: [SQUAT.id] }),
@@ -171,7 +171,7 @@ describe('WorkoutService.listHistory', () => {
   it('does not resolve exercise ids when no exercise filter is given', async () => {
     const { service, workouts, exercises } = setup([], []);
 
-    await service.listHistory('user-1', query({}));
+    await service.listWorkouts('user-1', query({}));
 
     expect(exercises.findIdsForFilter).not.toHaveBeenCalled();
     expect(workouts.findHistoryPage).toHaveBeenCalledWith(
