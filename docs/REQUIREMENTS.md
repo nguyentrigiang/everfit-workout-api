@@ -15,7 +15,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done. Add evidence (file / test / c
 - [x] F1.2 Units kg, lb — unit registry — unit-converter.spec.ts; e2e "logs several exercises with mixed units"
 - [x] F1.3 Store normalized kg alongside original — workout_sets.weight + unit + weight_kg — e2e "creates entries and sets with normalized kg values"
 - [x] F1.4 Bulk logging (multiple exercises per request) — one transaction, all-or-nothing — e2e "logs several exercises…", "stores nothing when one entry is invalid", "largest valid request"
-- [x] F2.1 History list for a user — GET /users/:userId/workouts — test/modules/workout/workout-history.e2e-spec.ts (F2.1)
+- [x] F2.1 History list for a user — GET /users/:userId/workouts — test/modules/workout/list-workouts.e2e-spec.ts (F2.1)
 - [x] F2.2 Filter: exercise name, partial match — e2e (F2.2), LIKE wildcards literal
 - [x] F2.3 Filter: date range — local_date, e2e (F2.3)
 - [x] F2.4 Filter: muscle group — e2e (F2.4), unknown slug → 400
