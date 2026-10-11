@@ -387,34 +387,47 @@ Each item is a choice: what was picked over what, what it gains and what it cost
 
 ## Scaling to 10,000 concurrent coaches
 
-**Load estimate (assumptions, not measurements):** 10,000 active coaches making one request every ~10 seconds is about **1,000 requests/s**, say 80% reads and 20% writes. Each request runs 2–4 queries of under 0.5 ms each (see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)), so the database does roughly 1–2 cores of query work: CPU is not the first limit, **connections are**. The `pg` pool defaults to 10 connections per app instance, so instances multiply connections, hence PgBouncer below. Writes come to ~200 transactions/s with ~5 sets each, about 1,000 set rows/s, each updating six B-trees today (see item 6 of the data list). Only latency has been measured so far, not throughput: a load test (e.g. k6) against a production-like setup should decide the instance count.
+**Load estimate (assumptions, not measurements):** 10,000 active coaches making one request every ~10 seconds is about **1,000 requests/s**, say 80% reads and 20% writes. Each request runs 2–4 queries of under 0.5 ms each (see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)), so the database does roughly 1–2 cores of query work: CPU is not the first limit, **connections are**. Writes come to ~200 transactions/s with ~5 sets each, about 1,000 set rows/s, each updating six B-trees today. Only latency has been measured so far, not throughput: a load test (e.g. k6) against a production-like setup should decide the instance count.
 
-- **Connections:** run several stateless app instances behind a load balancer, with PgBouncer in transaction mode in front of Postgres.
-- **Reads:** route history and PR queries to read replicas. Writes stay on the primary.
-- **Hot data:** cache PR responses per `(user, exercise, range)` in Redis and invalidate them on writes for that user and exercise. Optionally maintain a small "all-time PR" table asynchronously.
-- **Write path:** keep logging synchronous, but move side effects (PR notifications, analytics, exports) to a queue (e.g. BullMQ or SQS) via an outbox table. Large historical imports go through a background job.
-- **Protection:** rate limit per user and coach, enforce request size limits, set timeouts and statement timeouts.
-- **Observability:** add metrics (p95 latency per endpoint, DB pool usage, slow queries via `pg_stat_statements`) next to the request-id logs, and alert on error rate.
+**Data volume:** the design target is millions of clients and 50 million entries (about 175 million sets), some clients with ten years of history. A rough Fermi estimate for a platform of Everfit's size (about 200,000 coaches) is higher: 1–2 billion cumulative entries, about 2 million new entries a day and a few TB, roughly 30× the target. These are estimates, not Everfit figures. What still holds at either size: a client training five or six exercises a day for ten years has about 18,000 entries, fewer than the 50,000 measured; every index starts with `user_id`, so per-client queries stay as measured (history, deep cursor and PRs under 1 ms), and a larger table adds about one B-tree level.
+
+### 1. Scale the app horizontally
+
+- The app keeps no state between requests (no sessions, a self-contained cursor, no in-memory data that must stay in sync), so it scales **horizontally**: run N instances behind a load balancer and autoscale on CPU or p95 latency.
+- **Vertical** scaling (a bigger machine) helps little on its own: Node runs one thread, so use one process per core and keep adding instances.
+- Health checks (liveness, and readiness running `SELECT 1`) let the load balancer drop broken instances; rolling deploys rely on the graceful shutdown already in place (`enableShutdownHooks`, and `exec` in the entrypoint so the app receives SIGTERM).
+
+### 2. Scale the database: vertical first, then replicas, then partitions and shards
+
+- **Vertical first:** more RAM so the hot indexes stay in memory is the cheapest, fastest step. At the measured ratios (42 MB of sets and 61 MB of PR indexes per 175,000 sets), 175 million sets need about 42 GB of table and 60 GB of PR indexes.
+- **Connections:** PgBouncer in transaction mode in front of Postgres, since every app instance brings its own pool (10 connections by default).
+- **Read replicas** for history and PRs; writes stay on the primary. Replicas lag, so a coach who just logged a workout could read stale history: route that user's reads to the primary for a few seconds after each write (read-your-writes).
+- **Partition** `workout_entries` and `workout_sets` by hash of `user_id` (32–64 partitions). Every query is per client, so partitions prune well, indexes per partition stay small and vacuum runs per partition. At the realistic scale above, this is required, not optional.
+- **Shard** by `user_id` (e.g. Citus) once one primary is not enough; the partition key maps directly onto the shard key.
+- **Query and schema changes**, in order:
+  1. **Per-client custom exercises.** Unknown names currently go into one shared catalog, which with millions of clients fills with near-duplicates ("squat", "pause squat", typos) that everyone sees. Add `exercises.owner_user_id` (null for the curated catalog) with unique `(owner_user_id, name_normalized)`, and resolve names against the curated catalog plus the client's own. This is a data-correctness change and gets harder the longer it waits.
+  2. **Read filtered history per exercise.** A filter matching exercises the client rarely trains still walks the history index until `limit` matches are found (a filter matching nothing already returns early, which removed the 13.8 ms worst case). Read each matching exercise through the existing unique key `(user_id, exercise_id, performed_at)` with a `LATERAL` subquery and merge, so cost depends on exercises × `limit`, not on history size. No new index is needed; an extra `(user_id, exercise_id, performed_at DESC, id DESC)` index was measured and rejected.
+  3. **Trigram index for name search** (`pg_trgm` GIN on `exercises.name_normalized`) once the catalog reaches tens of thousands of rows; today `LIKE '%…%'` scans a 31-row table.
+  4. **Planner statistics.** Statistics are averaged over all clients, so a heavy and a light client can get the same plan. Raise the statistics target on `user_id` and `exercise_id`, and catch regressions with `auto_explain`.
+
+### 3. Take load off the servers
+
+- **Cache in layers** (cache-aside: read the cache, fall back to the database, then fill the cache):
+  - **In process:** the catalog (muscle-group slugs, exercise name to id). It is tiny and rarely changes, so a short TTL per instance removes those queries entirely.
+  - **Redis:** PR responses per `(user, exercise, range)` and each user's first history page, deleted when that user logs a workout (for PRs, only the affected exercise). When a hot key expires, let one request rebuild it while the others wait (request coalescing), so a burst does not all reach the database at once.
+  - **HTTP:** `ETag` with `Cache-Control: private`, so the app gets a `304 Not Modified` instead of the same body again.
+- **Precompute instead of recompute:** a monthly PR summary table `(user_id, exercise_id, month)` with the best weight, volume and 1RM, updated in the logging transaction (entries are immutable, so it never needs recomputing). Range PRs then read a few rows, and the three PR indexes on `workout_sets` (six B-trees updated per set today) can be dropped to cut write cost.
+- **Queue the slow work:** keep logging synchronous so the coach sees the result at once, but send side effects (PR notifications, analytics, exports) through an outbox table to a queue (e.g. BullMQ or SQS). Large historical imports return `202` with a job id and run in workers. Workers scale separately from the API, and retries are safe because the natural key skips rows already stored.
+- **Static content:** serve the OpenAPI document and docs from a CDN.
+
+### 4. Protect and observe
+
+- **Protection:** rate limits per coach at the API gateway, request size limits, timeouts and `statement_timeout`, so one heavy client cannot slow down the rest.
+- **Observability:** metrics (p95 latency per endpoint, DB pool usage, cache hit rate, queue depth, slow queries via `pg_stat_statements`) next to the request-id logs, with alerts on error rate and latency.
 - **Auth and tenancy:** coaches sign in (JWT or session), and every request checks that the coach may access the client before any query. The client id comes from the coach–client relationship, not from trusting the path parameter.
-- **Health checks:** a liveness endpoint and a readiness endpoint that runs `SELECT 1`, so the load balancer drops broken instances. Rolling deploys rely on the graceful shutdown already in place (`enableShutdownHooks`, and `exec` in the entrypoint so the app receives SIGTERM).
 - **Client time zones:** today the API trusts the offset it receives. When a client logs, the app should send the device's time zone at that moment, which keeps travel right. When a coach logs for a client, it should use the client's profile time zone, or let the coach pick it, so a coach in New York does not put a Vietnam workout on the wrong day. Store the IANA zone next to the offset so DST rules can be applied later.
 
-### Data and queries at 50 million entries
-
-Assume millions of clients, 50 million entries in total (about 175 million sets), some clients with ten years of history, and a much larger exercise catalog.
-
-**Realistic scale:** a rough Fermi estimate for a platform of Everfit's size (about 200,000 coaches) gives 1–2 billion cumulative entries, about 2 million new entries a day and a few TB of data, roughly 30× the assumption above. These are estimates, not Everfit figures. Per-client queries still hold (below), but at that size item 3 (partitioning) and sharding by `user_id` move from "when needed" to required.
-
-**What still holds:** a client training five or six exercises a day for ten years has about 18,000 entries, fewer than the 50,000 measured above. Every index starts with `user_id`, so per-client queries stay as measured (history, deep cursor and PRs under 1 ms); a larger table adds about one B-tree level.
-
-**What I would change, in order:**
-
-1. **Per-client custom exercises.** Unknown exercise names are currently added to one shared catalog. With millions of clients that catalog fills with near-duplicates ("squat", "pause squat", typos) that everyone sees. Add `exercises.owner_user_id` (null for the curated catalog) with unique `(owner_user_id, name_normalized)`; history and PRs resolve names against the curated catalog plus the client's own exercises. This is a data-correctness change and gets harder the longer it waits.
-2. **Read filtered history per exercise.** Exercise ids are already resolved on the catalog first, with an early return when none match (this removed the 13.8 ms worst case). An exercise or muscle-group filter that matches exercises the client rarely trains still walks the history index until `limit` matches are found. Read each matching exercise's entries through the existing unique key `(user_id, exercise_id, performed_at)` with a `LATERAL` subquery, then merge. Cost then depends on the number of exercises times `limit`, not on history size. No new index is needed; an extra `(user_id, exercise_id, performed_at DESC, id DESC)` index was measured and rejected.
-3. **Partition `workout_entries` and `workout_sets` by hash of `user_id`** (32–64 partitions). At the measured ratios (42 MB of sets and 61 MB of PR indexes per 175,000 sets) 175 million sets come to roughly 42 GB of table and 60 GB of PR indexes, which no longer fit in memory. Every query is per client, so partitions prune well, indexes per partition stay small, vacuum runs per partition, and the layout maps directly onto sharding by `user_id` (e.g. Citus) later.
-4. **Trigram index for name search** (`pg_trgm` GIN on `exercises.name_normalized`) once the catalog has tens of thousands of rows; `LIKE '%…%'` is a scan of a 31-row table today.
-5. **Planner statistics.** Statistics are averaged over all clients, so a heavy and a light client can get the same plan. Raise the statistics target on `user_id` and `exercise_id`, and catch regressions with `auto_explain`.
-6. **Monthly PR summary table** `(user_id, exercise_id, month)` with the best weight, volume and 1RM, updated in the logging transaction (entries are immutable, so it never needs recomputing). Range PRs then read a few rows regardless of planner choices, and the three PR indexes on `workout_sets` (six B-trees updated per set today) could be dropped to cut write cost.
+**Order of work:** load test first, then horizontal app scaling with PgBouncer, a bigger database with read replicas, caching and the monthly PR summary, per-client exercises, and finally partitioning and sharding as data grows toward billions of rows.
 
 ## AI-assisted workflow
 
