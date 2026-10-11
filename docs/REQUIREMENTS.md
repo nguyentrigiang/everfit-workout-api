@@ -46,7 +46,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done. Add evidence (file / test / c
 
 - [x] P1 Docker setup, `docker compose up` works from fresh clone — Dockerfile (multi-stage, non-root), docker-compose.yml, entrypoint migrate + seed; verified on an empty volume during the PostgreSQL 18 upgrade
 - [x] P2 Structured logging — nestjs-pino JSON logs with request id — logger.config.spec.ts, http-pipeline.e2e-spec.ts
-- [x] P3 Configuration management (validated env) — @nestjs/config + class-validator — env.validation.spec.ts
+- [x] P3 Configuration management (validated env) — @nestjs/config + class-validator — env.validation.spec.ts; every variable documented in README "Environment variables" and .env.example
 - [x] P4 Consistent structured error responses — AllExceptionsFilter + ErrorCode — all-exceptions.filter.spec.ts, http-pipeline e2e, swagger e2e (error schema)
 
 ## Testing

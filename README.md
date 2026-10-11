@@ -262,10 +262,44 @@ Tests are named by behavior and assert exact values computed by hand, never re-c
 ## Production readiness
 
 - **Docker:** multi-stage image running as a non-root user. Migrations and the seed run on start. Postgres has a TCP healthcheck, and the app waits for it.
-- **Configuration:** env vars are validated at startup with class-validator. A missing or invalid value stops the app with a message listing every problem. See [`.env.example`](.env.example).
+- **Configuration:** env vars are validated at startup with class-validator. A missing or invalid value stops the app with a message listing every problem. See [Environment variables](#environment-variables) and [`.env.example`](.env.example).
 - **Logging:** structured JSON logs (pino) with one line per request (except requests rejected by the body parser, see backlog B1) and a request id, taken from `x-request-id` or generated, echoed back and included in error bodies. Bodies and headers are never logged. Pretty output in development only.
 - **Errors:** one error shape. 5xx responses never expose internals; the stack goes to the log only.
 - **Limits and validation:** strict DTO validation with whitelist and unknown fields rejected, request size limits, DB CHECK constraints as a second line of defense.
+
+### Environment variables
+
+**App** (validated at startup in [`env.validation.ts`](src/infrastructure/config/env.validation.ts); the app reads config only through `ConfigService`):
+
+| Variable | Default | Rule |
+|---|---|---|
+| `NODE_ENV` | `production` | `development`, `production` or `test`. `development` enables pretty logs |
+| `PORT` | `3000` | Integer 1–65535 |
+| `DATABASE_URL` | required | `postgres://` or `postgresql://` connection string |
+| `LOG_LEVEL` | `info` | `fatal`, `error`, `warn`, `info`, `debug`, `trace` or `silent` |
+
+[`.env.example`](.env.example) holds development values (`NODE_ENV=development`, `LOG_LEVEL=debug`). The Docker image sets `NODE_ENV=production`.
+
+**Docker Compose** (all optional):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `everfit` | Database credentials; the app's `DATABASE_URL` is built from them. Local defaults only, set real secrets elsewhere |
+| `APP_PORT` | `3000` | Host port for the API, e.g. `APP_PORT=3001 docker compose up` when 3000 is taken |
+| `DB_PORT` | `5432` | Host port for Postgres |
+| `LOG_LEVEL` | `info` | Passed to the app container |
+
+`docker compose` also reads a `.env` file in the project root for these substitutions, so copying `.env.example` makes the container log at `debug`. Its other values do not reach the container: Compose sets `PORT` and builds `DATABASE_URL` itself.
+
+**Scripts and tests** (the seed and perf scripts load `.env` when present; e2e tests do not):
+
+| Variable | Default | Used by |
+|---|---|---|
+| `DATABASE_URL` | required | `npm run db:seed`, `db:seed:demo`, `db:explain` |
+| `SEED_CONFIG_PATH` | `config/exercises.json` | Catalog and demo seeds |
+| `BASE_URL` | `http://localhost:3000` | `npm run db:explain` (HTTP timings) |
+| `PERF_REPORT_PATH` | `docs/PERFORMANCE.md` | `npm run db:explain` (report output) |
+| `TEST_DATABASE_URL` | `postgresql://everfit:everfit@localhost:5432/everfit_test` | `npm run test:e2e`; never touches the main database |
 
 ## Performance
 
