@@ -262,7 +262,7 @@ npm run docs:check          # validates the OpenAPI document of a running built 
 ```
 
 - **Unit (105):** unit conversion (incl. adding `stone`), Epley and volume (incl. rounding pitfalls), decimal rounding, date and offset parsing, cursor encoding, env validation, log serializers, exception filter, validation error paths, catalog config validation, bulk-logging status counting and single-transaction writes, demo data generator (determinism, validation limits, local dates), EXPLAIN plan parsing and percentiles.
-- **E2E (87):** every endpoint through the real HTTP pipeline and Postgres:
+- **E2E (88):** every endpoint through the real HTTP pipeline and Postgres:
   - logging in mixed units, auto-created exercises
   - idempotent retries, concurrent identical and reversed-order requests
   - every validation edge case (invalid unit, null date, missing offset, future date, negative weight, zero reps, empty sets, limits, unknown fields)

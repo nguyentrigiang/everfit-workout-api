@@ -52,7 +52,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done. Add evidence (file / test / c
 ## Testing
 
 - [x] T1 Unit tests for calculations (conversion, 1RM, PRs) — 105 unit tests: unit-converter, strength-metrics, decimal, personal-record.service, workout.service, history-cursor, time
-- [x] T2 Integration tests for each endpoint — 87 e2e tests against Postgres: log, history, records, HTTP pipeline, Swagger, DB constraints, seeds
+- [x] T2 Integration tests for each endpoint — 88 e2e tests against Postgres: log, history, records, HTTP pipeline, Swagger, DB constraints, seeds
 - [x] T3 Edge case tests (E1–E5) — see E1–E5 evidence
 
 ## Deliverables
