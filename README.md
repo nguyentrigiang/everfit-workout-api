@@ -161,6 +161,61 @@ erDiagram
 
 Each row reads `type name key`: PK primary key, FK foreign key, UK unique. `workout_entries (user_id, exercise_id, performed_at)` is unique as well: it is the natural key that makes retries idempotent (see the index table below).
 
+### Tables
+
+**`muscle_groups`**: the list of muscle groups, seeded from `config/exercises.json`. A table rather than a text column, so the filter checks slugs against real rows and a future screen can list them.
+
+| Column | Purpose |
+|---|---|
+| `id` | Small integer key, used only by the join table |
+| `slug` | Stable value for the API filter (`?muscleGroup=chest`), unique |
+| `name` | Display name ("Chest") |
+| `sort_order` | Display order; slugs are listed in this order |
+
+**`exercises`**: one row per exercise, shared by all users. Kept apart from entries so a name is stored once, filters and PRs work on an id, and muscle groups attach to the exercise.
+
+| Column | Purpose |
+|---|---|
+| `id` | UUIDv7 key referenced by entries |
+| `name` | Display name as first logged or configured ("Bench Press") |
+| `name_normalized` | Lookup key (NFKC, trimmed, lowercased, single spaces), unique, so "bench  press" and "Bench Press" are one exercise. Also used for partial name search |
+| `created_at` | When the exercise was added (by the seed or on first log) |
+
+**`exercise_muscle_groups`**: which muscle groups an exercise works. Many-to-many: one exercise trains several groups (bench press: chest, triceps, shoulders) and one group has many exercises.
+
+| Column | Purpose |
+|---|---|
+| `exercise_id`, `muscle_group_id` | Composite primary key, so each pair is stored once. An extra index on `muscle_group_id` serves the muscle-group filter |
+
+**`workout_entries`**: one exercise a client did at one moment ("bench press on Oct 5 at 18:00"). This is what history lists and what a retry is matched against.
+
+| Column | Purpose |
+|---|---|
+| `id` | UUIDv7 key; tie-breaker in the history cursor |
+| `user_id` | The client from the path. First column of every index, so each query reads only that client's rows |
+| `exercise_id` | Which exercise |
+| `performed_at` | Exact moment in UTC: history order, cursor and part of the natural key |
+| `local_date` | The client's calendar day, so "October" means October where the client trained (see the timezone strategy under [Key design decisions](#key-design-decisions)) |
+| `utc_offset_minutes` | Offset the client sent (+07:00 is 420), kept to rebuild local time; a CHECK limits it to ±14 h |
+| `created_at` | When the row was written; later than `performed_at` for workouts logged after the fact |
+| UNIQUE `(user_id, exercise_id, performed_at)` | Natural key: a retry or a concurrent duplicate is skipped instead of stored twice |
+
+**`workout_sets`**: one row per set of an entry. Sets have their own table because PRs are per set (heaviest set, best set volume), and one row per set lets an index find the best set directly.
+
+| Column | Purpose |
+|---|---|
+| `id` | UUIDv7 key |
+| `entry_id` | Parent entry; sets are deleted with it |
+| `set_index` | Order within the entry (0, 1, 2…), unique per entry |
+| `reps` | Repetitions; a CHECK requires `> 0` |
+| `weight`, `unit` | Exactly what was logged (`315`, `lb`), never rewritten |
+| `weight_kg` | Weight in kg (6 decimals), so kg and lb sets compare directly |
+| `volume_kg` | `reps × weight_kg`, precomputed for the highest-volume PR |
+| `e1rm_kg` | Epley estimated 1RM, precomputed for the best-1RM PR |
+| `user_id`, `exercise_id`, `performed_at`, `local_date` | Copied from the entry so PR queries run on this table alone (see Normalization below) |
+
+### Design decisions
+
 **Why PostgreSQL:** the workload is relational and aggregation-heavy. PRs are top-1 lookups per user and exercise, which map directly onto composite B-tree indexes. Bulk logging needs transactions and unique constraints, and the data shape is fixed, so MongoDB's flexibility buys nothing here ([details](docs/DECISIONS.md#2026-10-08--database-postgresql)).
 
 **Normalization:** the catalog is normalized: exercises, muscle groups and a join table, seeded from config. `workout_sets` is deliberately denormalized. Each set stores the original `weight` and `unit`, the precomputed `weight_kg`, `volume_kg` and `e1rm_kg` (numeric, 6 decimals), and copies of `user_id`, `exercise_id`, `performed_at` and `local_date`. PR queries therefore need no join and no computation at read time. The copies are written from the entry row in SQL, so they cannot drift. Entries are immutable, which keeps the write-time cost acceptable ([details](docs/DECISIONS.md#2026-10-08--sets-storage-and-pr-strategy)).
