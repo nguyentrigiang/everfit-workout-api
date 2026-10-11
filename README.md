@@ -17,19 +17,31 @@ A NestJS + PostgreSQL API that lets coaches log client workouts (in kg or lb), b
 
 ## Quick start
 
+Requires Docker.
+
 ```bash
 docker compose up --build
 ```
 
-The app container applies migrations, seeds the exercise catalog (31 exercises, 12 muscle groups from [`config/exercises.json`](config/exercises.json)) and starts the API.
+Migrations and the exercise catalog seed (31 exercises, 12 muscle groups from [`config/exercises.json`](config/exercises.json)) run on start.
 
 - API: `http://localhost:3000/api/v1`
-- Swagger UI: `http://localhost:3000/docs`
+- Swagger UI: `http://localhost:3000/docs` (every endpoint can be tried from there)
 
-Try it:
+Stop with `docker compose down`; data is kept in a volume. `docker compose down -v` wipes it. Port 3000 or 5432 already taken? See [Environment variables](#environment-variables) (`APP_PORT`, `DB_PORT`).
+
+### Sample data (optional)
 
 ```bash
-# Log two exercises in one request (mixed units)
+docker compose exec app npm run db:seed:demo
+```
+
+Adds `perf-user` (50,000 entries) and `demo-user-01` … `demo-user-20` (500 entries each). Safe to re-run.
+
+### Basic usage
+
+```bash
+# Log workouts (several exercises per request, kg or lb)
 curl -X POST localhost:3000/api/v1/users/coach-1/workouts \
   -H 'Content-Type: application/json' \
   -d '{"entries":[
@@ -38,22 +50,12 @@ curl -X POST localhost:3000/api/v1/users/coach-1/workouts \
         {"date":"2026-10-05T18:30:00+07:00","exerciseName":"Bench Press",
          "sets":[{"reps":8,"weight":80,"unit":"kg"}]}]}'
 
-# History in lb, back exercises only
-curl 'localhost:3000/api/v1/users/coach-1/workouts?unit=lb&muscleGroup=back'
+# History, converted to lb
+curl 'localhost:3000/api/v1/users/coach-1/workouts?unit=lb'
 
-# Deadlift PRs this month vs last month
-curl 'localhost:3000/api/v1/users/coach-1/records?exercise=deadlift&from=2026-10-01&to=2026-10-31&compareFrom=2026-09-01&compareTo=2026-09-30'
+# Personal records for an exercise
+curl 'localhost:3000/api/v1/users/coach-1/records?exercise=deadlift'
 ```
-
-Sending the same POST again returns `200` with every entry marked `duplicate`. Nothing is stored twice.
-
-Optional sample data (about 7 seconds; safe to re-run, and a run interrupted midway is completed by running it again):
-
-```bash
-docker compose exec app npm run db:seed:demo
-```
-
-This adds `perf-user` with 50,000 entries and `demo-user-01` … `demo-user-20` with 500 entries each, so `/users/demo-user-01/workouts` and `/users/perf-user/records?exercise=squat` return data right away.
 
 ## Architecture
 
