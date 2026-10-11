@@ -4,6 +4,8 @@ How I used AI to build this API, where it went wrong, and what I kept under my o
 
 ## Tools and what I used them for
 
+The project is small, solo and time-boxed, so I set up only the process, skills and subagents that made it faster, and kept every decision with me. No MCP servers were needed: the AI worked inside the repo and ran the build, tests, migrations, `curl` and `EXPLAIN` itself.
+
 | Tool | Used for |
 |---|---|
 | **Claude Code** (main session) | Architecture options, implementation, tests, debugging, SQL and index design, Docker, README and docs. It worked inside the repo: ran the build, tests, migrations, `curl` and `EXPLAIN` itself. |
@@ -65,6 +67,10 @@ Each example was caught a different way.
 
 **5. Performance predictions that measurement disproved (caught by the `query-optimizer` subagent running `EXPLAIN ANALYZE`).** Before measuring, the AI predicted that PRs for an old month would be slow and proposed an extra `(user_id, exercise_id, performed_at DESC, id DESC)` index. `EXPLAIN ANALYZE` on 50,000 entries showed the planner already switched to the date index for old months (0.14 ms in the first run; the current report has 0.21 ms) and that the existing unique key made the extra index useless. The subagent also found the real worst case: a filter matching no exercise walked all 50,000 entries (13.8 ms). I kept the index out and fixed that path with a query change instead, down to 0.01 ms (`90a67a3`, `d21b778`).
 
+**6. Correct code that was too compact to read (caught by me, reading the code to explain it).** `logWorkouts` was one 70-line transaction callback with one-letter variables (`e`, `r`, `s`), inline helper lambdas, non-null assertions and the natural key rebuilt at every lookup. It was correct and tested, but written for brevity rather than for a reader, and I could not follow it when reviewing. I had the whole service layer rewritten as named steps that read like prose (`attachExercises`, `insertNewEntries`, `findAlreadyLoggedEntries`, `toLoggedEntry`, `insertSetsOfCreatedEntries`), without touching a single test, so the unchanged, passing tests prove the behavior is the same (`0460a3d`, `d2b6154`).
+
+Other functional bugs were caught the same ways, for example a JSON body limit below the largest valid request and a duplicate reporting the set count it was sent rather than the one stored (both by the reviewer subagent).
+
 ## Suggestions I rejected
 
 - **The seed as the source of truth (my call).** The AI recommended that every seed run replace the exercise-to-muscle-group mappings from the config file. I rejected it: a seeder initializes data, and once rows are in the database they belong to the running system. The seed is insert-only and never updates or deletes existing rows (implemented that way in `107ee11`).
@@ -75,6 +81,16 @@ Others are in the log, for example a `text[]` column for muscle groups instead o
 ## What the commit history shows
 
 Small commits, one concern each, in the order the work happened (`git log --oneline`). Bullets such as "Fix AI-generated skip logic…" or "Drop an AI-suggested extra index…" mark where AI output was corrected.
+
+## How this would grow on a larger project
+
+The setup above is small on purpose; more roles would have cost more setup and review time than they saved here. A larger team project would add:
+
+- **More roles as subagents**, each read-only in its own context: a security reviewer (authorization, injection, personal data in logs), an API contract reviewer (breaking changes against the published OpenAPI), a migration reviewer (locking DDL, backfills, rollback), a load-test agent that writes and runs k6 scenarios, and a docs writer.
+- **Skills for team workflows:** ticket to plan with acceptance criteria, a migration checklist, release notes from commits, an incident runbook.
+- **Hooks and CI:** pre-commit typecheck, lint and tests; secret scanning; no direct commits to `main`; an AI review step on every pull request; shared permission settings checked into the repo.
+- **MCP servers**, read-only by default: Jira or Linear for tickets, Confluence or Notion for specs and ADRs, GitHub for PRs and issues, a PostgreSQL server on a read replica or staging for real query plans and data shapes, Sentry or Datadog for errors and traces, Figma for the UI specs behind API shapes, Slack for notifications, and a browser for end-to-end checks.
+- **Guardrails:** least-privilege tokens, no production writes from the AI, and human approval for anything outward-facing.
 
 ## Lessons
 
