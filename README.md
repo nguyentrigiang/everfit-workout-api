@@ -61,47 +61,6 @@ curl 'localhost:3000/api/v1/users/coach-1/records?exercise=deadlift'
 
 A modular monolith: code is grouped by business capability first and by technical layer second, so each domain can grow (or later be extracted into its own service) without mixing with the others. The rules are in [`docs/ARCHITECTURE_BRIEF.md`](docs/ARCHITECTURE_BRIEF.md).
 
-```mermaid
-flowchart LR
-  Client -->|HTTP JSON| HTTP
-
-  subgraph infra_http["infrastructure/http"]
-    HTTP["pino-http · ValidationPipe<br/>AllExceptionsFilter"]
-  end
-
-  subgraph workout["modules/workout"]
-    WC["WorkoutController<br/>PersonalRecordController"] --> WS["WorkoutService<br/>PersonalRecordService"]
-    WS --> Domain["domain/<br/>units, strength metrics, time"]
-    WS --> WR["WorkoutRepository<br/>(abstract)"]
-    WS --> PRR["PersonalRecordRepository"]
-    PWR["PrismaWorkoutRepository"]
-  end
-
-  subgraph exercise["modules/exercise"]
-    ER["ExerciseRepository"]
-  end
-
-  subgraph shared["shared"]
-    TR["TransactionRunner<br/>(abstract)"]
-  end
-
-  subgraph infra_db["infrastructure/database"]
-    PTR["PrismaTransactionRunner"]
-    Base["PrismaRepository<br/>(base class)"]
-  end
-
-  HTTP --> WC
-  WS --> ER
-  WS --> TR
-  PWR -. implements .-> WR
-  PTR -. extends .-> TR
-  PWR -. extends .-> Base
-  PRR -. extends .-> Base
-  ER -. extends .-> Base
-  Base --> PG[(PostgreSQL 18)]
-  Seed["seed on start<br/>config/exercises.json"] --> PG
-```
-
 ```text
 src/
 ├── modules/                 business capabilities
@@ -122,8 +81,6 @@ src/
 | `modules/exercise` | Exercise catalog lookups, name normalization, auto-create, muscle-group filters |
 | `shared` | `AppException` and error codes, Swagger error decorators, the `TransactionRunner` contract |
 | `infrastructure` | HTTP pipeline (logging, validation, exception filter, Swagger setup), validated config, Prisma client, transaction runner, base repository, seed and performance scripts |
-
-Dependencies point one way: `workout` uses `exercise`, never the reverse, and business modules never import `infrastructure/http`. `app.module.ts` wires everything through Nest DI.
 
 **Design principles (SOLID, applied pragmatically):**
 - **Single responsibility:** controllers handle HTTP, services hold business rules, repositories own SQL, and `domain/` is plain logic with no framework imports.

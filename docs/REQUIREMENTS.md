@@ -59,7 +59,7 @@ Status: `[ ]` todo, `[~]` in progress, `[x]` done. Add evidence (file / test / c
 
 - [x] D1 Time estimate provided before starting — sent to Everfit by email
 - [x] D2 Clean, iterative commit history — 30 commits, Feature/Bugfix format, one concern each; bullets mark corrected AI output
-- [x] D3 README: architecture overview + diagram — modular architecture diagram, src tree, module table, SOLID principles
+- [x] D3 README: architecture overview + diagram — src tree, module table, SOLID principles (architecture flowchart removed for readability; ER diagram under Database)
 - [x] D4 README: setup instructions — Quick start (docker compose up) + local dev steps
 - [x] D5 README: API docs (endpoints, request/response, error codes) — Swagger at /docs, linked from README (user's choice)
 - [x] D6 README: schema + design decisions (Postgres justification, indexes) — ER diagram, index table
