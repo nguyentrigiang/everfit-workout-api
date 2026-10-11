@@ -346,15 +346,44 @@ Re-run with `npm run db:seed:demo && npm run build && npm run db:explain` (the a
 
 ## Trade-offs
 
-- **No update or delete endpoint.** The assignment does not ask for one. A retry with different sets for an existing entry is reported as `duplicate`, and the stored sets are kept.
-- **Unparsable JSON** returns `BAD_REQUEST` rather than a dedicated code. Nest maps body-parser errors before the exception filter (see backlog B1 in `docs/REQUIREMENTS.md`).
-- **No cache.** PRs are computed on read from indexes, which is fast and always consistent. A cache would add invalidation on every write.
-- **PR `difference`** is computed from the rounded values shown to the client, so it can differ from the exact difference by at most 0.01.
-- **Offset, not IANA timezone.** Correct for the logged moment, but we cannot re-derive local time under a different DST rule.
-- **Zero tolerance for future timestamps.** A client clock running ahead can get a 400 for "now".
-- **Denormalized set columns** trade some write cost and storage for join-free, index-backed top-1 PR lookups.
-- **Unknown exercise names are added to the shared catalog.** Simple, and enough for one team; at scale this needs per-client custom exercises (see below).
-- **Filters that match exercises the client rarely trains** still walk the client's history index until `limit` matches are found (a filter matching no exercise at all returns early). Fine for the target; the per-exercise read is described below.
+Each item is a choice: what was picked over what, what it gains and what it costs.
+
+### Data model
+
+- **Time: a per-entry offset over a per-client time zone or UTC only.** *Gain:* each workout keeps the calendar day where it happened, so a client who trains one week in Vietnam and the next in the US gets both weeks on the right days; no timezone database is needed; calendar filters are an indexed `local_date` match. *Cost:* the API trusts the sender, so a coach in New York logging for a client in Vietnam with the coach's own clock puts the workout on the wrong day. Around travel, local dates do not always follow real time: two workouts can share a date, and crossing the date line (Japan to Hawaii) a later workout can even carry an earlier date; history is ordered by `performed_at`, so the order stays right while the dates look out of order. An offset is a snapshot, so local time cannot be re-derived if DST rules change.
+- **Primary keys: UUIDv7 over bigint serials or UUIDv4.** *Gain:* ids need no central counter and cannot be enumerated (no guessing `/entries/124` from `123`); unlike v4, new ids are time-ordered, so inserts append to the end of the B-tree instead of splitting random pages. *Cost:* 16 bytes instead of 8, so every primary key and every index holding one is larger; the id embeds its creation time to the millisecond, which reveals when a row was written; generation relies on PostgreSQL 18's `uuidv7()` (older versions would generate ids in the app).
+- **Sets: one row per set, denormalized, with precomputed metrics, over computing on read.** *Gain:* each PR is one top-1 index lookup with no join or arithmetic at read time. *Cost:* every set row updates six B-trees and stores copied columns, so writes cost more, and changing the 1RM formula would need a backfill.
+- **Weights: exact `numeric` over floating point.** *Gain:* no `0.1 + 0.2` drift in stored kg, volume or 1RM; values keep 6 decimals and are rounded only for output. *Cost:* larger columns and slower arithmetic than `double precision`, and the app carries decimal strings and `decimal.js` instead of plain numbers.
+- **Muscle groups: tables over a `text[]` column.** *Gain:* foreign keys stop typos, and a future screen can list groups with display names and order. *Cost:* a join table and a subquery in the filter; the speed is the same today because the catalog is tiny.
+
+### Writes
+
+- **Exercise names: free text with normalization over an `exerciseId` picked from the catalog.** *Gain:* matches the assignment's request shape, and clients need no catalog lookup first. Normalization (NFKC, trim, lowercase, single spaces) merges "Bench Press", "  bench   press" and differently encoded Vietnamese accents. *Cost:* synonyms and typos stay separate ("Squat", "Back Squat", "Sqaut"). Diacritics are kept on purpose, because stripping them would merge different Vietnamese words (chân, chăn, chặn), so "chan" and "chân" are two exercises. In production, clients would pick an `exerciseId` from a searchable catalog with aliases.
+- **Unknown exercises: auto-create over rejecting.** *Gain:* coaches are never blocked by the catalog. *Cost:* typos and variants become separate exercises ("chan" vs "chân", "Squat" vs "Back Squat"), and new exercises have no muscle groups, so the muscle-group filter misses them until the config is updated.
+- **Retries: an insert-only natural key over upsert or an `Idempotency-Key` header.** *Gain:* a retry or a concurrent duplicate stores exactly one copy, with no client-generated key and no extra table. *Cost:* the first write wins; a resend with corrected sets is reported as `duplicate` and ignored, so corrections need a separate update flow. Two different workouts of one exercise at the exact same instant cannot both be stored.
+- **Bulk requests: one transaction, all-or-nothing, over partial success.** *Gain:* a request is either fully stored or not at all, and a 400 points to the exact bad field (`entries[3].sets[1].weight`). *Cost:* one bad entry rejects the other 99, so the client fixes and resends the whole batch; locks are held for the whole batch, hence the 100-entry limit.
+- **Indexes: many purpose-built indexes over a few general ones.** *Gain:* every read is an index lookup (history, deep cursor and PRs under 1 ms at 50,000 entries). *Cost:* each set insert updates six B-trees and each entry two more; the three PR indexes take more space than the sets themselves (61 MB vs 42 MB per 175,000 sets); vacuum and backups grow with them. The monthly PR summary table under Scaling would let the PR indexes go.
+- **Future timestamps: zero tolerance over a clock-skew window.** *Gain:* no workout is ever dated in the future. *Cost:* a client whose clock runs ahead gets a 400 for "now".
+- **Catalog seed: insert-only over syncing from config.** *Gain:* a seed run never rewrites or deletes data already in use. *Cost:* changing an existing exercise's muscle groups in `config/exercises.json` does not reach an existing database; that needs a migration or a manual change.
+
+### Reads
+
+- **PRs: computed on read over a cache or summary table.** *Gain:* always consistent with the latest write, with nothing to invalidate. *Cost:* every request repeats the index lookups; fine at the measured sub-millisecond cost, revisited under Scaling.
+- **Pagination: a keyset cursor over OFFSET.** *Gain:* a deep page costs the same as the first, with no gaps or duplicates while new workouts arrive. *Cost:* no page numbers or "jump to page N"; clients move forward with the cursor only. The cursor is opaque base64url, so its shape can change without breaking clients, but it cannot be built or edited by hand.
+- **PR ties: the most recent set over the first time the value was reached.** *Gain:* shows the client still lifts at that level. *Cost:* the date the record was first set is not shown.
+- **PR `difference` from the displayed values over the exact values.** *Gain:* the difference always matches the two numbers the client shows. *Cost:* it can differ from the exact difference by up to 0.01.
+
+### API
+
+- **Comparison: explicit `compareFrom`/`compareTo` over presets such as `period=month`.** *Gain:* any comparison (week, month, year, custom) without the server guessing the client's time zone. *Cost:* the client computes both date ranges itself.
+- **Output unit: one unit for the whole response (default kg) over each set's original unit.** *Gain:* values are directly comparable and charts need no conversion. *Cost:* a set logged in lb comes back in kg unless `unit=lb` is passed; the original unit is stored but not returned in history.
+- **Raw SQL over the Prisma query builder for the core queries.** *Gain:* full control over `unnest` bulk inserts, `ON CONFLICT`, keyset conditions and top-1 plans. *Cost:* result types are a promise to TypeScript, not checked at runtime, so the queries rely on the e2e suite running against Postgres.
+
+### Known limitations
+
+- No update or delete endpoint; the assignment does not cover them.
+- Unparsable JSON returns `BAD_REQUEST` rather than a dedicated code, because Nest maps body-parser errors before the exception filter (backlog B1 in `docs/REQUIREMENTS.md`).
+- A filter matching exercises the client rarely trains walks the client's history index until `limit` matches are found (a filter matching no exercise returns early). The per-exercise read that fixes it is described under Scaling.
 
 ## Scaling to 10,000 concurrent coaches
 
@@ -368,7 +397,7 @@ Re-run with `npm run db:seed:demo && npm run build && npm run db:explain` (the a
 - **Observability:** add metrics (p95 latency per endpoint, DB pool usage, slow queries via `pg_stat_statements`) next to the request-id logs, and alert on error rate.
 - **Auth and tenancy:** coaches sign in (JWT or session), and every request checks that the coach may access the client before any query. The client id comes from the coach–client relationship, not from trusting the path parameter.
 - **Health checks:** a liveness endpoint and a readiness endpoint that runs `SELECT 1`, so the load balancer drops broken instances. Rolling deploys rely on the graceful shutdown already in place (`enableShutdownHooks`, and `exec` in the entrypoint so the app receives SIGTERM).
-- **Client time zones:** store each client's IANA time zone and derive `local_date` on the server. Today the API trusts the offset the client sends, so a coach in New York logging for a client in Vietnam with the coach's own clock would put the workout on the wrong calendar day.
+- **Client time zones:** today the API trusts the offset it receives. When a client logs, the app should send the device's time zone at that moment, which keeps travel right. When a coach logs for a client, it should use the client's profile time zone, or let the coach pick it, so a coach in New York does not put a Vietnam workout on the wrong day. Store the IANA zone next to the offset so DST rules can be applied later.
 
 ### Data and queries at 50 million entries
 
