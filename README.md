@@ -341,16 +341,23 @@ Re-run with `npm run db:seed:demo && npm run build && npm run db:explain` (the a
 
 ## Scaling to 10,000 concurrent coaches
 
+**Load estimate (assumptions, not measurements):** 10,000 active coaches making one request every ~10 seconds is about **1,000 requests/s**, say 80% reads and 20% writes. Each request runs 2–4 queries of under 0.5 ms each (see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)), so the database does roughly 1–2 cores of query work: CPU is not the first limit, **connections are**. The `pg` pool defaults to 10 connections per app instance, so instances multiply connections, hence PgBouncer below. Writes come to ~200 transactions/s with ~5 sets each, about 1,000 set rows/s, each updating six B-trees today (see item 6 of the data list). Only latency has been measured so far, not throughput: a load test (e.g. k6) against a production-like setup should decide the instance count.
+
 - **Connections:** run several stateless app instances behind a load balancer, with PgBouncer in transaction mode in front of Postgres.
 - **Reads:** route history and PR queries to read replicas. Writes stay on the primary.
 - **Hot data:** cache PR responses per `(user, exercise, range)` in Redis and invalidate them on writes for that user and exercise. Optionally maintain a small "all-time PR" table asynchronously.
 - **Write path:** keep logging synchronous, but move side effects (PR notifications, analytics, exports) to a queue (e.g. BullMQ or SQS) via an outbox table. Large historical imports go through a background job.
 - **Protection:** rate limit per user and coach, enforce request size limits, set timeouts and statement timeouts.
 - **Observability:** add metrics (p95 latency per endpoint, DB pool usage, slow queries via `pg_stat_statements`) next to the request-id logs, and alert on error rate.
+- **Auth and tenancy:** coaches sign in (JWT or session), and every request checks that the coach may access the client before any query. The client id comes from the coach–client relationship, not from trusting the path parameter.
+- **Health checks:** a liveness endpoint and a readiness endpoint that runs `SELECT 1`, so the load balancer drops broken instances. Rolling deploys rely on the graceful shutdown already in place (`enableShutdownHooks`, and `exec` in the entrypoint so the app receives SIGTERM).
+- **Client time zones:** store each client's IANA time zone and derive `local_date` on the server. Today the API trusts the offset the client sends, so a coach in New York logging for a client in Vietnam with the coach's own clock would put the workout on the wrong calendar day.
 
 ### Data and queries at 50 million entries
 
 Assume millions of clients, 50 million entries in total (about 175 million sets), some clients with ten years of history, and a much larger exercise catalog.
+
+**Realistic scale:** a rough Fermi estimate for a platform of Everfit's size (about 200,000 coaches) gives 1–2 billion cumulative entries, about 2 million new entries a day and a few TB of data, roughly 30× the assumption above. These are estimates, not Everfit figures. Per-client queries still hold (below), but at that size item 3 (partitioning) and sharding by `user_id` move from "when needed" to required.
 
 **What still holds:** a client training five or six exercises a day for ten years has about 18,000 entries, fewer than the 50,000 measured above. Every index starts with `user_id`, so per-client queries stay as measured (history, deep cursor and PRs under 1 ms); a larger table adds about one B-tree level.
 
