@@ -432,13 +432,14 @@ This project was built with Claude Code. Being small, solo and time-boxed, it us
 
 The loop: clarifying questions → plan → my approval → code and tests → reviewer subagent → my review → commit only when I say so. No MCP servers were needed: the AI worked inside the repo and ran the build, tests, migrations, `curl` and `EXPLAIN` itself. The setup is small on purpose; more roles would have cost more setup and review time than they saved on a project this size.
 
-**Three notable AI mistakes and how I handled them**
+**Four notable AI mistakes and how I handled them**
 
 - **A folder layout that would not scale (caught when I reviewed the structure as a whole).** The AI laid the code out as one flat folder per technical piece (`workouts`, `records`, `units`, `prisma`, `common`…), with personal records split from workouts and services calling Prisma transactions directly. It worked, but nothing said where new code goes. I wrote [`docs/ARCHITECTURE_BRIEF.md`](docs/ARCHITECTURE_BRIEF.md) (modular monolith, small `shared/`, isolated `infrastructure/`, pragmatic SOLID), and the AI refactored against it in four reviewed steps with the API unchanged, checked by diffing `/docs-json` (`c85d9ea`, then `b4b46bb` to `2faf53d`).
 - **PostgreSQL 16 picked by habit (caught because I asked why).** There was no reason for 16, and it missed PostgreSQL 18's native `uuidv7()`. I had it upgrade to 18 and then switch primary keys to time-ordered UUIDv7 in a separate commit (`b54c715`, `f61f5ec`). Since then I ask "why this?" about every default.
 - **Correct code that was too compact to read (caught when I read the code to explain it).** `logWorkouts` was one 70-line transaction callback with one-letter variables and non-null assertions. I asked for the whole service layer to be rewritten as named steps that read like prose, without touching a single test, so the unchanged, passing tests prove the behavior is the same (`0460a3d`, `d2b6154`).
+- **Bulk inserts that could deadlock (caught by the reviewer subagent I set up for every diff).** The AI inserted entries and new exercises in request order. Two concurrent requests with the same entries in a different order locked the unique index in opposite orders and deadlocked, which surfaced as a 500, exactly the concurrent-write case the assignment asks about. I had the inserts run in a fixed order of the natural key (`ORDER BY` inside the `INSERT … SELECT`) and added an e2e test that fires reversed bodies concurrently (`7fe3785`).
 
-Others were caught by the reviewer subagent (inserts that could deadlock under concurrent writes) or by tests (Epley returning 79.999… instead of 80); see [`AI_WORKFLOW.md`](AI_WORKFLOW.md).
+Others were caught the same ways: a JSON body limit below the largest valid request (reviewer), a duplicate reporting the set count it was sent rather than the one stored (reviewer), and Epley returning 79.999… instead of 80 (unit test); see [`AI_WORKFLOW.md`](AI_WORKFLOW.md).
 
 **What a larger project would add**
 
