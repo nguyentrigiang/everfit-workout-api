@@ -387,47 +387,81 @@ Each item is a choice: what was picked over what, what it gains and what it cost
 
 ## Scaling to 10,000 concurrent coaches
 
-**Load estimate (assumptions, not measurements):** 10,000 active coaches making one request every ~10 seconds is about **1,000 requests/s**, say 80% reads and 20% writes. Each request runs 2–4 queries of under 0.5 ms each (see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)), so the database does roughly 1–2 cores of query work: CPU is not the first limit, **connections are**. Writes come to ~200 transactions/s with ~5 sets each, about 1,000 set rows/s, each updating six B-trees today. Only latency has been measured so far, not throughput: a load test (e.g. k6) against a production-like setup should decide the instance count.
+This API is one part of a coaching platform. At 10,000 concurrent coaches the platform also has sign-in, coach and client management, training programs, messaging, subscriptions and billing, so scaling is planned for the whole system, with this service as one domain in it.
 
-**Data volume:** the design target is millions of clients and 50 million entries (about 175 million sets), some clients with ten years of history. A rough Fermi estimate for a platform of Everfit's size (about 200,000 coaches) is higher: 1–2 billion cumulative entries, about 2 million new entries a day and a few TB, roughly 30× the target. These are estimates, not Everfit figures. What still holds at either size: a client training five or six exercises a day for ten years has about 18,000 entries, fewer than the 50,000 measured; every index starts with `user_id`, so per-client queries stay as measured (history, deep cursor and PRs under 1 ms), and a larger table adds about one B-tree level.
+**Load estimate (assumptions, not measurements):**
+- **Coaches:** 10,000 online, one request every ~10 seconds (dashboards, client management, messages, programming): about 1,000 requests/s.
+- **Clients:** assume ~3 online per coach, so ~30,000, one request every ~20 seconds (logging workouts, viewing programs, chat): about 1,500 requests/s.
+- That is ~2,500 requests/s on average. Peaks (mornings and evenings, Mondays, January) run 2–3× higher, so the design target is **~7,500 requests/s**.
+- Sign-in, token refresh and payment webhooks are a small share of requests but sit on the critical path.
+- The heaviest reads are not workout logging but **coach dashboards**, which summarize every client of a coach.
+- Most queries are per user and indexed, so the database's first limit is **connections**, not CPU: every instance brings its own pool (10 by default). Only the latency of this repo's three endpoints has been measured (under 1 ms of DB time each, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)); a load test of the whole platform (e.g. k6) should decide instance counts.
 
-### 1. Scale the app horizontally
+**Data volume:** the design target for training data is millions of clients and 50 million entries (about 175 million sets), some clients with ten years of history. A rough Fermi estimate for a platform of Everfit's size (about 200,000 coaches) is higher: 1–2 billion cumulative entries, about 2 million new entries a day and a few TB, roughly 30× the target. These are estimates, not Everfit figures. What still holds at either size: a client training five or six exercises a day for ten years has about 18,000 entries, fewer than the 50,000 measured; every index starts with `user_id`, so per-client queries stay as measured, and a larger table adds about one B-tree level.
 
-- The app keeps no state between requests (no sessions, a self-contained cursor, no in-memory data that must stay in sync), so it scales **horizontally**: run N instances behind a load balancer and autoscale on CPU or p95 latency.
-- **Vertical** scaling (a bigger machine) helps little on its own: Node runs one thread, so use one process per core and keep adding instances.
-- Health checks (liveness, and readiness running `SELECT 1`) let the load balancer drop broken instances; rolling deploys rely on the graceful shutdown already in place (`enableShutdownHooks`, and `exec` in the entrypoint so the app receives SIGTERM).
+### 1. Split the platform by domain
 
-### 2. Scale the database: vertical first, then replicas, then partitions and shards
+- **Domains:** Identity (sign-in, tokens, roles), Coaching (organizations, coaches, coach–client relationships, client profiles), Training (programs, workout logging, history, PRs: this repo), Messaging, Billing (plans, subscriptions, invoices) and Notifications.
+- **Start as a modular monolith:** one module and one database schema per domain, the way this repo already separates `workout` and `exercise`.
+- **Extract a service** only where load or requirements differ: Messaging (long-lived websockets, fan-out), Notifications (bursty) and Billing (external provider, audit requirements).
+- **Events between domains** through an outbox and a message bus (`WorkoutLogged`, `ClientAssigned`, `SubscriptionChanged`), instead of chains of synchronous calls.
 
-- **Vertical first:** more RAM so the hot indexes stay in memory is the cheapest, fastest step. At the measured ratios (42 MB of sets and 61 MB of PR indexes per 175,000 sets), 175 million sets need about 42 GB of table and 60 GB of PR indexes.
-- **Connections:** PgBouncer in transaction mode in front of Postgres, since every app instance brings its own pool (10 connections by default).
-- **Read replicas** for history and PRs; writes stay on the primary. Replicas lag, so a coach who just logged a workout could read stale history: route that user's reads to the primary for a few seconds after each write (read-your-writes).
-- **Partition** `workout_entries` and `workout_sets` by hash of `user_id` (32–64 partitions). Every query is per client, so partitions prune well, indexes per partition stay small and vacuum runs per partition. At the realistic scale above, this is required, not optional.
-- **Shard** by `user_id` (e.g. Citus) once one primary is not enough; the partition key maps directly onto the shard key.
-- **Query and schema changes**, in order:
-  1. **Per-client custom exercises.** Unknown names currently go into one shared catalog, which with millions of clients fills with near-duplicates ("squat", "pause squat", typos) that everyone sees. Add `exercises.owner_user_id` (null for the curated catalog) with unique `(owner_user_id, name_normalized)`, and resolve names against the curated catalog plus the client's own. This is a data-correctness change and gets harder the longer it waits.
-  2. **Read filtered history per exercise.** A filter matching exercises the client rarely trains still walks the history index until `limit` matches are found (a filter matching nothing already returns early, which removed the 13.8 ms worst case). Read each matching exercise through the existing unique key `(user_id, exercise_id, performed_at)` with a `LATERAL` subquery and merge, so cost depends on exercises × `limit`, not on history size. No new index is needed; an extra `(user_id, exercise_id, performed_at DESC, id DESC)` index was measured and rejected.
-  3. **Trigram index for name search** (`pg_trgm` GIN on `exercises.name_normalized`) once the catalog reaches tens of thousands of rows; today `LIKE '%…%'` scans a 31-row table.
-  4. **Planner statistics.** Statistics are averaged over all clients, so a heavy and a light client can get the same plan. Raise the statistics target on `user_id` and `exercise_id`, and catch regressions with `auto_explain`.
+### 2. Identity, tenancy and authorization
 
-### 3. Take load off the servers
+- **Sign-in** through a managed identity provider (Auth0, Cognito, Keycloak) or a dedicated auth service. Short-lived JWT access tokens are verified at the gateway without a database call; long-lived refresh tokens are revoked through short access-token lifetimes plus a denylist in Redis.
+- **Tenancy:** organization → coaches → clients, and every row carries its tenant scope. "May coach X access client Y?" is checked on every request, so the answer is cached in Redis and cleared on `ClientAssigned`. When clients log their own workouts, the client id comes from the token, never from the path.
+- **Protect sign-in:** rate limits, credential-stuffing protection and temporary lockouts after repeated failures.
+- **Client time zones** live in the client profile (Coaching). When a client logs, the app sends the device's zone at that moment, which keeps travel right; when a coach logs for a client, the client's profile zone is used, so a coach in New York does not put a Vietnam workout on the wrong day. The IANA zone is stored next to the offset so DST rules can be applied later.
 
-- **Cache in layers** (cache-aside: read the cache, fall back to the database, then fill the cache):
-  - **In process:** the catalog (muscle-group slugs, exercise name to id). It is tiny and rarely changes, so a short TTL per instance removes those queries entirely.
-  - **Redis:** PR responses per `(user, exercise, range)` and each user's first history page, deleted when that user logs a workout (for PRs, only the affected exercise). When a hot key expires, let one request rebuild it while the others wait (request coalescing), so a burst does not all reach the database at once.
-  - **HTTP:** `ETag` with `Cache-Control: private`, so the app gets a `304 Not Modified` instead of the same body again.
-- **Precompute instead of recompute:** a monthly PR summary table `(user_id, exercise_id, month)` with the best weight, volume and 1RM, updated in the logging transaction (entries are immutable, so it never needs recomputing). Range PRs then read a few rows, and the three PR indexes on `workout_sets` (six B-trees updated per set today) can be dropped to cut write cost.
-- **Queue the slow work:** keep logging synchronous so the coach sees the result at once, but send side effects (PR notifications, analytics, exports) through an outbox table to a queue (e.g. BullMQ or SQS). Large historical imports return `202` with a job id and run in workers. Workers scale separately from the API, and retries are safe because the natural key skips rows already stored.
-- **Static content:** serve the OpenAPI document and docs from a CDN.
+### 3. Subscriptions and billing
 
-### 4. Protect and observe
+- **Payments** go through a provider (e.g. Stripe). The platform keeps plans, subscription state and **entitlements**: the maximum number of clients per coach and the features in each plan.
+- **Webhooks:** verify the signature, deduplicate by event id, process through a queue, and tolerate out-of-order events by comparing the provider's timestamps.
+- **Entitlement checks on hot paths** (such as adding a client) read a per-coach cache refreshed on `SubscriptionChanged`; the provider is never called synchronously inside a user request.
+- **Degrade gently:** a failed payment starts a grace period. Clients keep logging workouts; only coach features are limited once it ends.
+- **A separate billing database**, consistency first and with an audit trail: low traffic, but mistakes cost money.
 
-- **Protection:** rate limits per coach at the API gateway, request size limits, timeouts and `statement_timeout`, so one heavy client cannot slow down the rest.
-- **Observability:** metrics (p95 latency per endpoint, DB pool usage, cache hit rate, queue depth, slow queries via `pg_stat_statements`) next to the request-id logs, with alerts on error rate and latency.
-- **Auth and tenancy:** coaches sign in (JWT or session), and every request checks that the coach may access the client before any query. The client id comes from the coach–client relationship, not from trusting the path parameter.
-- **Client time zones:** today the API trusts the offset it receives. When a client logs, the app should send the device's time zone at that moment, which keeps travel right. When a coach logs for a client, it should use the client's profile time zone, or let the coach pick it, so a coach in New York does not put a Vietnam workout on the wrong day. Store the IANA zone next to the offset so DST rules can be applied later.
+### 4. Scale the services horizontally
 
-**Order of work:** load test first, then horizontal app scaling with PgBouncer, a bigger database with read replicas, caching and the monthly PR summary, per-client exercises, and finally partitioning and sharding as data grows toward billions of rows.
+- Services keep no state between requests (no sessions, a self-contained cursor, no in-memory data that must stay in sync), so each one scales **horizontally** behind the gateway: run N instances and autoscale on CPU or p95 latency.
+- **Vertical** scaling helps little on its own: Node runs one thread, so use one process per core and keep adding instances.
+- Messaging holds long-lived websocket connections, so it scales on connection count and shares messages between instances through pub/sub (e.g. Redis).
+- Health checks (liveness, and readiness running `SELECT 1`) let the load balancer drop broken instances; rolling deploys rely on graceful shutdown (`enableShutdownHooks`, and `exec` in the entrypoint so the app receives SIGTERM).
+
+### 5. Scale the data
+
+- **One database or schema per domain**, each scaled for its own needs: Training is the largest; Billing is small and must be consistent; Messaging is write-heavy and may use a different store.
+- **Coach dashboards** read a **precomputed per-client read model** (last workout, weekly volume, compliance) updated from `WorkoutLogged` events, instead of scanning each client's workouts every time a coach opens the dashboard.
+- **Training data:** vertical first, then replicas, then partitions and shards.
+  - **Vertical first:** more RAM so the hot indexes stay in memory is the cheapest step. At the measured ratios (42 MB of sets and 61 MB of PR indexes per 175,000 sets), 175 million sets need about 42 GB of table and 60 GB of PR indexes.
+  - **Connections:** PgBouncer in transaction mode.
+  - **Read replicas** for history and PRs; writes stay on the primary. Replicas lag, so a user's reads go to the primary for a few seconds after that user writes (read-your-writes).
+  - **Partition** `workout_entries` and `workout_sets` by hash of `user_id` (32–64 partitions): every query is per client, so partitions prune well and vacuum runs per partition. At the realistic scale above this is required.
+  - **Shard** by `user_id` (e.g. Citus) once one primary is not enough. Coaching data shards by tenant.
+- **Training query and schema changes**, in order:
+  1. **Per-client custom exercises.** Unknown names currently go into one shared catalog, which with millions of clients fills with near-duplicates ("squat", "pause squat", typos) that everyone sees. Add `exercises.owner_user_id` (null for the curated catalog) with unique `(owner_user_id, name_normalized)`. This is a data-correctness change and gets harder the longer it waits.
+  2. **Read filtered history per exercise.** A filter matching exercises the client rarely trains still walks the history index until `limit` matches are found (a filter matching nothing already returns early, which removed the 13.8 ms worst case). Read each matching exercise through the unique key `(user_id, exercise_id, performed_at)` with a `LATERAL` subquery and merge, so cost depends on exercises × `limit`. An extra `(user_id, exercise_id, performed_at DESC, id DESC)` index was measured and rejected.
+  3. **Trigram index for name search** (`pg_trgm` GIN on `exercises.name_normalized`) once the catalog reaches tens of thousands of rows.
+  4. **Planner statistics:** raise the statistics target on `user_id` and `exercise_id`, and catch plan regressions with `auto_explain`.
+
+### 6. Take load off the servers
+
+- **Cache in layers**, from closest to the user inward. The closer a cache sits to the user, the more load it saves and the harder it is to invalidate, so a user's private data is cached only on that user's device and in Redis (where events can clear it); the edge holds public data only.
+  - **Mobile app (on the device):** programs, the exercise catalog, recent history and PRs are stored locally (e.g. SQLite), so the app opens without an API call. It refreshes with conditional requests (`If-None-Match`) and gets `304 Not Modified` when nothing changed, and a push or "data changed" event triggers a refresh instead of polling. **Workouts logged offline** are queued on the device and sent when the connection returns; resending is safe because the natural key turns a repeat into `duplicate`.
+  - **CDN / edge (e.g. Cloudflare):** static and heavy content (images, **exercise videos**, the web app, API docs) with long TTLs and versioned file names, private videos behind signed URLs. Public, rarely changing API responses (the curated exercise catalog, plan list) are cached at the edge with a short TTL and `stale-while-revalidate`. Per-user responses are never cached at the edge (`Cache-Control: private`). The edge also stops bad traffic before it reaches the servers: WAF, DDoS protection and edge rate limits.
+  - **API gateway:** verifies JWTs locally without a database call, and can cache public responses such as app configuration and feature flags.
+  - **In process (each app instance):** small, rarely changing data (catalog, muscle-group slugs, plan definitions, feature flags) with a short TTL or cleared by a pub/sub event. Never per-user data, since each instance would hold a different copy.
+  - **Shared cache server (Redis):** coach–client permissions, subscription entitlements, PR responses per `(user, exercise, range)`, each user's first history page and coach dashboard data. Each entry is cleared by the event that changes it (`WorkoutLogged`, `ClientAssigned`, `SubscriptionChanged`), with a TTL as a safety net. When a hot key expires, one request rebuilds it while the others wait (request coalescing).
+  - **Database:** enough RAM for the hot indexes to stay in memory, read replicas, and the precomputed read models below.
+- **Precompute instead of recompute:** the dashboard read model above, and a monthly PR summary table `(user_id, exercise_id, month)` updated in the logging transaction (entries are immutable). Range PRs then read a few rows, and the three PR indexes on `workout_sets` (six B-trees updated per set today) can be dropped to cut write cost.
+- **Queue the slow work:** keep workout logging synchronous so the coach sees the result at once, and send side effects (PR notifications, dashboard updates, analytics, exports, billing webhooks) through the outbox to a queue (e.g. BullMQ or SQS). Large historical imports return `202` with a job id. Workers scale separately from the API, and retries are safe because the natural key skips rows already stored.
+
+### 7. Protect and observe
+
+- **Fairness between tenants:** rate limits per tenant and per user at the gateway, request size limits, timeouts and `statement_timeout`, so one large organization cannot slow down the others.
+- **Observability:** an SLO per domain (sign-in and logging stricter than reports), distributed tracing across services, and metrics (p95 per endpoint, DB pool usage, cache hit rate, queue depth and lag, slow queries via `pg_stat_statements`) next to request-id logs, with alerts on error rate and latency.
+
+**Order of work:** load test the whole platform; identity and cached authorization; horizontal scaling with PgBouncer; the dashboard read model and caching; billing through webhooks and a queue; extract messaging and notifications; finally partition and shard training data as it grows toward billions of rows.
 
 ## AI-assisted workflow
 
