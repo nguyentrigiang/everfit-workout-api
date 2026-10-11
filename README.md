@@ -112,11 +112,12 @@ Conventions:
 ## Database
 
 ```mermaid
+%%{init: {'er': {'fontSize': 18}, 'themeVariables': {'fontSize': '18px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, Ubuntu, sans-serif'}}}%%
 erDiagram
-  muscle_groups ||--o{ exercise_muscle_groups : ""
-  exercises ||--o{ exercise_muscle_groups : ""
-  exercises ||--o{ workout_entries : ""
-  workout_entries ||--|{ workout_sets : ""
+  muscle_groups ||--o{ exercise_muscle_groups : "tagged on"
+  exercises ||--o{ exercise_muscle_groups : "targets"
+  exercises ||--o{ workout_entries : "logged as"
+  workout_entries ||--|{ workout_sets : "has"
 
   muscle_groups {
     int id PK
@@ -137,8 +138,8 @@ erDiagram
     uuid id PK
     text user_id
     uuid exercise_id FK
-    timestamptz performed_at "UTC"
-    date local_date "client calendar day"
+    timestamptz performed_at
+    date local_date
     int utc_offset_minutes
   }
   workout_sets {
@@ -146,17 +147,19 @@ erDiagram
     uuid entry_id FK
     int set_index
     int reps
-    numeric weight "as logged"
-    text unit "as logged"
+    numeric weight
+    text unit
     numeric weight_kg
     numeric volume_kg
     numeric e1rm_kg
-    text user_id "copied"
-    uuid exercise_id "copied"
-    timestamptz performed_at "copied"
-    date local_date "copied"
+    text user_id
+    uuid exercise_id
+    timestamptz performed_at
+    date local_date
   }
 ```
+
+Each row reads `type name key`: PK primary key, FK foreign key, UK unique. `workout_entries (user_id, exercise_id, performed_at)` is unique as well: it is the natural key that makes retries idempotent (see the index table below).
 
 **Why PostgreSQL:** the workload is relational and aggregation-heavy. PRs are top-1 lookups per user and exercise, which map directly onto composite B-tree indexes. Bulk logging needs transactions and unique constraints, and the data shape is fixed, so MongoDB's flexibility buys nothing here ([details](docs/DECISIONS.md#2026-10-08--database-postgresql)).
 
