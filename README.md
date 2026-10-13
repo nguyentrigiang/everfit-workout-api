@@ -100,7 +100,7 @@ Abstractions exist only where they mark a real boundary; the personal-record and
 
 ## API
 
-Full, always up-to-date documentation is in **Swagger UI at [`/docs`](http://localhost:3000/docs)** (OpenAPI JSON at `/docs-json`). It covers endpoints, request and response examples, limits and error codes, and it is generated from the DTOs so it stays in sync with validation.
+Full documentation is in Swagger UI at [`/docs`](http://localhost:3000/docs) (OpenAPI JSON at `/docs-json`): endpoints, request and response examples, limits and error codes. It is generated from the DTOs, so it matches validation.
 
 Conventions:
 - Base path `/api/v1`. No auth; `userId` is a path parameter.
@@ -333,20 +333,18 @@ Tests are named by behavior and assert exact values computed by hand, never re-c
 | Sets for a page of 100 entries | `UNIQUE (entry_id, set_index)` | 0.09 ms | — |
 | PRs, all time | Three top-1 Index Scans on the `(user_id, exercise_id, <metric> DESC)` indexes | 0.08 ms | 2.7 / 3.9 ms |
 | PRs, one month / month vs month | Planner picks the metric index or `(user_id, exercise_id, local_date)` by range | 0.12–0.28 ms | 3.1–3.6 / 4.5–5.1 ms |
-| Exercise filter matching nothing (former worst case) | Catalog lookup finds no ids, history is not queried | **0.01 ms** (was 13.8 ms) | 2.3 / 2.8 ms (was 13.0 / 14.2 ms) |
+| Exercise filter matching nothing (former worst case) | Catalog lookup finds no ids, history is not queried | 0.01 ms (was 13.8 ms) | 2.3 / 2.8 ms (was 13.0 / 14.2 ms) |
 
 Re-run with `npm run db:seed:demo && npm run build && npm run db:explain` (the app must be running for the HTTP columns).
 
 **Findings:**
 - Keyset pagination keeps the deepest page as fast as the first one: OFFSET would read and discard 49,000 rows.
-- Each PR is one index lookup that reads a handful of rows, independent of history size. The denormalized metric columns are what make this possible.
+- Each PR is one index lookup on the denormalized metric columns and reads a handful of rows, independent of history size.
 - No new index is needed for the 50k target. A suggested `(user_id, exercise_id, performed_at DESC, id DESC)` index was measured and rejected: the existing unique key already orders entries within an exercise.
-- The first measurement found one path that grew with history size: a filter matching no exercise walked all 50,000 entries (13.8 ms). Resolving exercise ids on the catalog first and returning early when there are none removed it (0.01 ms). The fix was a query change, not an index. For a filter that matches exercises the client rarely trains, the plan depends on the planner's estimate and may walk part of the history index; reading each exercise through the unique key makes this bounded at larger scale (see below).
+- The first measurement found one path that grew with history size: a filter matching no exercise walked all 50,000 entries (13.8 ms). Resolving exercise ids on the catalog first and returning early when there are none brought it to 0.01 ms without a new index. For a filter that matches exercises the client rarely trains, the plan depends on the planner's estimate and may walk part of the history index; reading each exercise through the unique key makes this bounded at larger scale (see below).
 - About 3 ms of each HTTP request is the Nest pipeline, unit conversion and JSON; the database accounts for well under 1 ms.
 
 ## Trade-offs
-
-Each item is a choice: what was picked over what, what it gains and what it costs.
 
 ### Data model
 
@@ -392,10 +390,10 @@ This API is one part of a coaching platform. At 10,000 concurrent coaches the pl
 **Load estimate (assumptions, not measurements):**
 - **Coaches:** 10,000 online, one request every ~10 seconds (dashboards, client management, messages, programming): about 1,000 requests/s.
 - **Clients:** assume ~3 online per coach, so ~30,000, one request every ~20 seconds (logging workouts, viewing programs, chat): about 1,500 requests/s.
-- That is ~2,500 requests/s on average. Peaks (mornings and evenings, Mondays, January) run 2–3× higher, so the design target is **~7,500 requests/s**.
+- That is ~2,500 requests/s on average. Peaks (mornings and evenings, Mondays, January) run 2–3× higher, so the design target is ~7,500 requests/s.
 - Sign-in, token refresh and payment webhooks are a small share of requests but sit on the critical path.
-- The heaviest reads are not workout logging but **coach dashboards**, which summarize every client of a coach.
-- Most queries are per user and indexed, so the database's first limit is **connections**, not CPU: every instance brings its own pool (10 by default). Only the latency of this repo's three endpoints has been measured (under 1 ms of DB time each, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)); a load test of the whole platform (e.g. k6) should decide instance counts.
+- The heaviest reads are coach dashboards, which summarize every client of a coach.
+- Most queries are per user and indexed, so the database runs out of connections before CPU: every instance brings its own pool (10 by default). Only the latency of this repo's three endpoints has been measured (under 1 ms of DB time each, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)); a load test of the whole platform (e.g. k6) should decide instance counts.
 
 **Data volume:** the design target for training data is millions of clients and 50 million entries (about 175 million sets), some clients with ten years of history. A rough Fermi estimate for a platform of Everfit's size (about 200,000 coaches) is higher: 1–2 billion cumulative entries, about 2 million new entries a day and a few TB, roughly 30× the target. These are estimates, not Everfit figures. What still holds at either size: a client training five or six exercises a day for ten years has about 18,000 entries, fewer than the 50,000 measured; every index starts with `user_id`, so per-client queries stay as measured, and a larger table adds about one B-tree level.
 
@@ -415,23 +413,23 @@ This API is one part of a coaching platform. At 10,000 concurrent coaches the pl
 
 ### 3. Subscriptions and billing
 
-- **Payments** go through a provider (e.g. Stripe). The platform keeps plans, subscription state and **entitlements**: the maximum number of clients per coach and the features in each plan.
+- **Payments** go through a provider (e.g. Stripe). The platform keeps plans, subscription state and entitlements: the maximum number of clients per coach and the features in each plan.
 - **Webhooks:** verify the signature, deduplicate by event id, process through a queue, and tolerate out-of-order events by comparing the provider's timestamps.
 - **Entitlement checks on hot paths** (such as adding a client) read a per-coach cache refreshed on `SubscriptionChanged`; the provider is never called synchronously inside a user request.
 - **Degrade gently:** a failed payment starts a grace period. Clients keep logging workouts; only coach features are limited once it ends.
-- **A separate billing database**, consistency first and with an audit trail: low traffic, but mistakes cost money.
+- **Separate database:** Billing gets its own database with an audit trail. Traffic is low, but mistakes cost money.
 
 ### 4. Scale the services horizontally
 
-- Services keep no state between requests (no sessions, a self-contained cursor, no in-memory data that must stay in sync), so each one scales **horizontally** behind the gateway: run N instances and autoscale on CPU or p95 latency.
-- **Vertical** scaling helps little on its own: Node runs one thread, so use one process per core and keep adding instances.
+- Services keep no state between requests (no sessions, a self-contained cursor, no in-memory data that must stay in sync), so each one scales horizontally behind the gateway: run N instances and autoscale on CPU or p95 latency.
+- Vertical scaling helps little on its own: Node runs one thread, so use one process per core and keep adding instances.
 - Messaging holds long-lived websocket connections, so it scales on connection count and shares messages between instances through pub/sub (e.g. Redis).
 - Health checks (liveness, and readiness running `SELECT 1`) let the load balancer drop broken instances; rolling deploys rely on graceful shutdown (`enableShutdownHooks`, and `exec` in the entrypoint so the app receives SIGTERM).
 
 ### 5. Scale the data
 
 - **One database or schema per domain**, each scaled for its own needs: Training is the largest; Billing is small and must be consistent; Messaging is write-heavy and may use a different store.
-- **Coach dashboards** read a **precomputed per-client read model** (last workout, weekly volume, compliance) updated from `WorkoutLogged` events, instead of scanning each client's workouts every time a coach opens the dashboard.
+- **Coach dashboards** read a precomputed per-client read model (last workout, weekly volume, compliance) updated from `WorkoutLogged` events, instead of scanning each client's workouts every time a coach opens the dashboard.
 - **Training data:** vertical first, then replicas, then partitions and shards.
   - **Vertical first:** more RAM so the hot indexes stay in memory is the cheapest step. At the measured ratios (42 MB of sets and 61 MB of PR indexes per 175,000 sets), 175 million sets need about 42 GB of table and 60 GB of PR indexes.
   - **Connections:** PgBouncer in transaction mode.
@@ -447,8 +445,8 @@ This API is one part of a coaching platform. At 10,000 concurrent coaches the pl
 ### 6. Take load off the servers
 
 - **Cache in layers**, from closest to the user inward. The closer a cache sits to the user, the more load it saves and the harder it is to invalidate, so a user's private data is cached only on that user's device and in Redis (where events can clear it); the edge holds public data only.
-  - **Mobile app (on the device):** programs, the exercise catalog, recent history and PRs are stored locally (e.g. SQLite), so the app opens without an API call. It refreshes with conditional requests (`If-None-Match`) and gets `304 Not Modified` when nothing changed, and a push or "data changed" event triggers a refresh instead of polling. **Workouts logged offline** are queued on the device and sent when the connection returns; resending is safe because the natural key turns a repeat into `duplicate`.
-  - **CDN / edge (e.g. Cloudflare):** static and heavy content (images, **exercise videos**, the web app, API docs) with long TTLs and versioned file names, private videos behind signed URLs. Public, rarely changing API responses (the curated exercise catalog, plan list) are cached at the edge with a short TTL and `stale-while-revalidate`. Per-user responses are never cached at the edge (`Cache-Control: private`). The edge also stops bad traffic before it reaches the servers: WAF, DDoS protection and edge rate limits.
+  - **Mobile app (on the device):** programs, the exercise catalog, recent history and PRs are stored locally (e.g. SQLite), so the app opens without an API call. It refreshes with conditional requests (`If-None-Match`) and gets `304 Not Modified` when nothing changed, and a push or "data changed" event triggers a refresh instead of polling. Workouts logged offline are queued on the device and sent when the connection returns; resending is safe because the natural key turns a repeat into `duplicate`.
+  - **CDN / edge (e.g. Cloudflare):** static and heavy content (images, exercise videos, the web app, API docs) with long TTLs and versioned file names, private videos behind signed URLs. Public, rarely changing API responses (the curated exercise catalog, plan list) are cached at the edge with a short TTL and `stale-while-revalidate`. Per-user responses are never cached at the edge (`Cache-Control: private`). The edge also stops bad traffic before it reaches the servers: WAF, DDoS protection and edge rate limits.
   - **API gateway:** verifies JWTs locally without a database call, and can cache public responses such as app configuration and feature flags.
   - **In process (each app instance):** small, rarely changing data (catalog, muscle-group slugs, plan definitions, feature flags) with a short TTL or cleared by a pub/sub event. Never per-user data, since each instance would hold a different copy.
   - **Shared cache server (Redis):** coach–client permissions, subscription entitlements, PR responses per `(user, exercise, range)`, each user's first history page and coach dashboard data. Each entry is cleared by the event that changes it (`WorkoutLogged`, `ClientAssigned`, `SubscriptionChanged`), with a TTL as a safety net. When a hot key expires, one request rebuilds it while the others wait (request coalescing).

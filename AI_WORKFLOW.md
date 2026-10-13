@@ -9,7 +9,7 @@ The project is small, solo and time-boxed, so I set up only the process, skills 
 | Tool | Used for |
 |---|---|
 | **Claude Code** (main session) | Architecture options, implementation, tests, debugging, SQL and index design, Docker, README and docs. It worked inside the repo: ran the build, tests, migrations, `curl` and `EXPLAIN` itself. |
-| **`domain-reviewer` subagent** | Read-only reviewer with a fresh context. It checked feature diffs against the domain rules in `CLAUDE.md` and the decisions in `docs/DECISIONS.md` before I reviewed it. It cannot edit files, so it judges the code instead of defending it. |
+| **`domain-reviewer` subagent** | Read-only reviewer with a fresh context. It checked feature diffs against the domain rules in `CLAUDE.md` and the decisions in `docs/DECISIONS.md` before I reviewed it. It cannot edit files, so it has no fix of its own to defend. |
 | **`query-optimizer` subagent** | Read-only. It ran `EXPLAIN (ANALYZE, BUFFERS)` on 50,000 entries, including worst cases I had not thought of. |
 | **`grill-plan` skill** | Made the AI ask me clarifying questions before every plan, mapped to the assignment's requirement IDs. |
 | `test-writer` subagent, `check-progress` skill | Set up at the start but not needed in practice: tests were written in the main session together with each feature, and progress was tracked in `docs/REQUIREMENTS.md`. |
@@ -43,8 +43,8 @@ flowchart LR
 - **Make the AI ask first.** Before each plan it asks up to four questions, each with concrete options and a recommendation. I answer, and the answers go into `DECISIONS.md`.
 - **Plan approval is a hard gate.** No code before I approve a plan; anything outside the approved plan needs a new approval.
 - **Independent review.** The reviewer runs in a separate context and is read-only, so it is not anchored on the implementer's reasoning.
-- **Evidence over explanations.** I asked for tests with hand-computed expected values, e2e runs against a real database, `EXPLAIN ANALYZE` on 50k rows, and a clean-clone run of the README commands.
-- **Ask "why" and review the shape, not just the diff.** PostgreSQL 16 was only questioned because I asked why the AI picked it; the folder layout because I reviewed the structure as a whole.
+- **Evidence.** I asked for tests with hand-computed expected values, e2e runs against a real database, `EXPLAIN ANALYZE` on 50k rows, and a clean-clone run of the README commands.
+- **Ask "why" and review the whole structure.** PostgreSQL 16 was only questioned because I asked why the AI picked it; the folder layout because I reviewed the structure as a whole.
 - **Write mistakes down.** Every wrong output or rejected suggestion goes into `docs/AI_LOG.md` with how it was found and the fixing commit.
 
 ### Where I kept control
@@ -67,7 +67,7 @@ Each example was caught a different way.
 
 **5. Performance predictions that measurement disproved (caught by the `query-optimizer` subagent running `EXPLAIN ANALYZE`).** Before measuring, the AI predicted that PRs for an old month would be slow and proposed an extra `(user_id, exercise_id, performed_at DESC, id DESC)` index. `EXPLAIN ANALYZE` on 50,000 entries showed the planner already switched to the date index for old months (0.14 ms in the first run; the current report has 0.21 ms) and that the existing unique key made the extra index useless. The subagent also found the real worst case: a filter matching no exercise walked all 50,000 entries (13.8 ms). I kept the index out and fixed that path with a query change instead, down to 0.01 ms (`634f75d`, `748b8e6`).
 
-**6. Correct code that was too compact to read (caught by me, reading the code to explain it).** `logWorkouts` was one 70-line transaction callback with one-letter variables (`e`, `r`, `s`), inline helper lambdas, non-null assertions and the natural key rebuilt at every lookup. It was correct and tested, but written for brevity rather than for a reader, and I could not follow it when reviewing. I had the whole service layer rewritten as named steps that read like prose (`attachExercises`, `insertNewEntries`, `findAlreadyLoggedEntries`, `toLoggedEntry`, `insertSetsOfCreatedEntries`), without touching a single test, so the unchanged, passing tests prove the behavior is the same (`d526b91`, `dcc621f`).
+**6. Correct code that was too compact to read (caught by me, reading the code to explain it).** `logWorkouts` was one 70-line transaction callback with one-letter variables (`e`, `r`, `s`), inline helper lambdas, non-null assertions and the natural key rebuilt at every lookup. It was correct and tested, but I could not follow it when reviewing. I had the whole service layer rewritten as named steps that read like prose (`attachExercises`, `insertNewEntries`, `findAlreadyLoggedEntries`, `toLoggedEntry`, `insertSetsOfCreatedEntries`), without touching a single test, so the unchanged, passing tests prove the behavior is the same (`d526b91`, `dcc621f`).
 
 Other functional bugs were caught the same ways, for example a JSON body limit below the largest valid request and a duplicate reporting the set count it was sent rather than the one stored (both by the reviewer subagent).
 
@@ -96,7 +96,7 @@ The setup above is small on purpose; more roles would have cost more setup and r
 
 - The AI is fast and usually right on patterns, but it chooses defaults by habit. Asking "why this?" and reviewing the overall structure myself found the two biggest structural issues.
 - A reviewer in its own context catches what the implementer misses: concurrency (deadlocks), limits that did not match (a 100 KB body limit under a 250 KB valid request), and partial-failure paths.
-- Measurements beat predictions, including the AI's own.
-- Writing every mistake down kept the process honest, and turned into this document.
+- `EXPLAIN ANALYZE` on 50,000 entries corrected the AI's performance predictions (example 5).
+- Logging every mistake as it happened is what made this document possible to write.
 
 Full list: 32 wrong or suboptimal outputs, 9 rejected suggestions and 4 process corrections in [`docs/AI_LOG.md`](docs/AI_LOG.md).
